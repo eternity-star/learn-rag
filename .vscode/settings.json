@@ -1,0 +1,6 @@
+{
+  "js/ts.tsdk.path": "client/node_modules/typescript/lib",
+  "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+
+  "unocss.root": "client"
+}

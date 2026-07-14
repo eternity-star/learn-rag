@@ -1,12 +1,17 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
+import './styles';
 
-import App from './App.vue'
-import router from './router'
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
 
-const app = createApp(App)
+import App from './App.vue';
+import router from './router';
+import 'viewerjs/dist/viewer.css';
+import VueViewer from 'v-viewer';
 
-app.use(createPinia())
-app.use(router)
+const app = createApp(App);
 
-app.mount('#app')
+app.use(VueViewer);
+app.use(createPinia());
+app.use(router);
+
+app.mount('#app');
