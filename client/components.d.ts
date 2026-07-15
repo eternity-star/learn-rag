@@ -22,9 +22,11 @@ declare module 'vue' {
     NMessageProvider: typeof import('naive-ui')['NMessageProvider']
     NModalProvider: typeof import('naive-ui')['NModalProvider']
     NNotificationProvider: typeof import('naive-ui')['NNotificationProvider']
+    NSpin: typeof import('naive-ui')['NSpin']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SiderTree: typeof import('./src/components/sider-tree/src/SiderTree.vue')['default']
+    WangEditor: typeof import('./src/components/wangeditor/src/WangEditor.vue')['default']
   }
 }
 
@@ -40,7 +42,9 @@ declare global {
   const NMessageProvider: typeof import('naive-ui')['NMessageProvider']
   const NModalProvider: typeof import('naive-ui')['NModalProvider']
   const NNotificationProvider: typeof import('naive-ui')['NNotificationProvider']
+  const NSpin: typeof import('naive-ui')['NSpin']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
   const SiderTree: typeof import('./src/components/sider-tree/src/SiderTree.vue')['default']
+  const WangEditor: typeof import('./src/components/wangeditor/src/WangEditor.vue')['default']
 }

@@ -13,6 +13,7 @@
   "dependencies": {
     "@microsoft/fetch-event-source": "^2.0.1",
     "@wangeditor/editor": "^5.1.23",
+    "@wangeditor/editor-for-vue": "^5.1.12",
     "lodash-es": "^4.18.1",
     "naive-ui": "^2.44.1",
     "pinia": "^3.0.4",

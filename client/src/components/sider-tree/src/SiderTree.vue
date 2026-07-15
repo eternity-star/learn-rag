@@ -41,28 +41,35 @@ const { height, minLeftWidth, maxLeftWidth } = toRefs(props);
 .silder-document {
   padding: 10px;
   height: var(--component-height);
+  box-sizing: border-box;
+  overflow: hidden;
+
   .template-left {
     float: left;
     height: calc(var(--component-height) - 20px);
     overflow-y: auto;
     position: relative;
   }
+
   .template-right {
-    // width: 70%;
-    min-width: calc(100% - var(--max-left-width));
-    max-width: calc(100% - var(--min-left-width));
+    // 用 BFC 占满剩余宽度，随左侧拖拽自适应缩小；不再用刚性 min-width 避免被挤到下方
+    overflow: hidden;
     height: calc(var(--component-height) - 20px);
-    overflow-y: auto;
+    max-width: calc(100% - var(--min-left-width));
     padding: 10px;
+    box-sizing: border-box;
+
     .template-header {
       margin-bottom: 10px;
     }
+
     .template-body {
       width: 100%;
       height: 100%;
     }
   }
 }
+
 .resize-content {
   position: absolute;
   top: 0;
@@ -70,7 +77,7 @@ const { height, minLeftWidth, maxLeftWidth } = toRefs(props);
   bottom: 0;
   left: 0;
   padding: 10px;
-  padding-left: 0px;
+  padding-left: 0;
   overflow-x: hidden;
 }
 
@@ -90,7 +97,6 @@ const { height, minLeftWidth, maxLeftWidth } = toRefs(props);
   right: 0;
   top: 0;
   bottom: 0;
-  // border-right: 1px solid #e9eff8;
   border-left: 1px solid #e9eff8;
   pointer-events: none;
 }

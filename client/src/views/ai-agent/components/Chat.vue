@@ -53,13 +53,7 @@
               v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
               class="message-content return-content"
             >
-              <mavon-editor
-                v-model="msg.content"
-                :subfield="false"
-                :defaultOpen="'preview'"
-                :toolbarsFlag="false"
-                v-viewer
-              />
+              <WangEditor v-model:value="msg.content" v-viewer />
             </div>
             <div
               v-else-if="msg.isStream == 0"
@@ -74,64 +68,71 @@
     </div>
     <!-- 输入区域 -->
     <div class="input-area">
-      <div class="input-box">
-        <!-- 新增提示词展示 -->
-        <n-input
-          v-model="newMessage"
-          type="textarea"
-          :disabled="!isAllowInput"
-          :auto-size="{ minRows: 3, maxRows: 9 }"
-          :placeholder="
-            selectedBusiness || isOnlyPage
-              ? '请向我提问或输入/查看提示词'
-              : '请先选择下方的业务对象'
-          "
-          style="width: 100%"
-          @blur="handleInputBlur"
-          @focus="handleInputFocus"
-          @input="handlePromptInput"
-          @keydown.enter.exact.prevent="sendMessage"
-        ></n-input>
-        <!-- 添加提示词下拉列表 -->
-        <div
-          v-if="showPrompts"
-          class="prompt-list"
-          @mousedown="e => e.preventDefault()"
-        >
+      <div class="input-box" :class="{ 'is-disabled': !isAllowInput }">
+        <div class="input-main">
+          <n-input
+            v-model:value="newMessage"
+            type="textarea"
+            :disabled="!isAllowInput"
+            :bordered="false"
+            :autosize="{ minRows: 1, maxRows: 8 }"
+            :placeholder="
+              selectedBusiness || isOnlyPage
+                ? '请向我提问或输入/查看提示词'
+                : '请先选择下方的业务对象'
+            "
+            @blur="handleInputBlur"
+            @focus="handleInputFocus"
+            @input="handlePromptInput"
+            @keydown.enter.exact.prevent="sendMessage"
+          />
           <div
-            v-for="(prompt, index) in filteredPrompts"
-            :key="index"
-            class="prompt-item"
-            @click="selectPrompt(prompt)"
+            v-if="showPrompts"
+            class="prompt-list"
+            @mousedown="e => e.preventDefault()"
           >
-            {{ prompt.label }}
+            <div
+              v-for="(prompt, index) in filteredPrompts"
+              :key="index"
+              class="prompt-item"
+              @click="selectPrompt(prompt)"
+            >
+              {{ prompt.label }}
+            </div>
+            <n-empty
+              v-if="!filteredPrompts.length"
+              style="margin: 10px 0"
+            ></n-empty>
           </div>
-          <n-empty
-            v-if="!filteredPrompts.length"
-            style="margin: 10px 0"
-          ></n-empty>
         </div>
-        <div
-          @click.stop="toggleRecording"
-          class="mic-button"
-          :class="{ recording: isRecording, 'disabled-send': !isAllowSend }"
-        >
-          <n-icon
-            type="audio"
-            :theme="isRecording ? 'twoTone' : 'outlined'"
-            style="font-size: 18px"
-          />
-        </div>
-        <div
-          @click.stop="sendMessage"
-          :class="['send-class', !isAllowSend ? 'disabled-send' : '']"
-        >
-          <img
-            src="@/assets/image/ai/icon_send.svg"
-            alt="发送"
-            width="18px"
-            height="18px"
-          />
+        <div class="input-toolbar">
+          <div class="toolbar-left"></div>
+          <div class="toolbar-right">
+            <button
+              type="button"
+              class="tool-btn"
+              :class="{
+                recording: isRecording,
+                'is-disabled': !isAllowInput,
+              }"
+              :disabled="!isAllowInput"
+              @click.stop="toggleRecording"
+            >
+              <n-icon
+                :component="isRecording ? AudioFilled : AudioOutlined"
+                :size="22"
+              />
+            </button>
+            <button
+              type="button"
+              class="send-btn"
+              :class="{ 'is-disabled': !isAllowSend }"
+              :disabled="!isAllowSend"
+              @click.stop="sendMessage"
+            >
+              <n-icon :component="ArrowUpOutlined" :size="18" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -141,6 +142,11 @@
 import { useRoute } from 'vue-router';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { isJSON } from '@/utils/obj';
+import { WangEditor } from '@/components';
+
+import AudioOutlined from '~icons/ant-design/audio-outlined';
+import AudioFilled from '~icons/ant-design/audio-filled';
+import ArrowUpOutlined from '~icons/ant-design/arrow-up-outlined';
 
 const route = useRoute();
 const message = useMessage();
@@ -460,7 +466,7 @@ function handleInputFocus() {
   }
 }
 function handlePromptInput(e) {
-  const value = e.target.value;
+  const value = e;
   if (value.includes('/')) {
     showPrompts.value = true;
     filteredPrompts.value = filterPrompts(value.split('/')[1]);
@@ -602,93 +608,174 @@ onUnmounted(() => {
   }
 }
 .input-area {
-  min-height: 100px; // 最小高度
-  max-height: 300px; // 最大高度限制
-  padding: 20px;
-  border-top: 1px solid #eee;
+  padding: 16px 20px 20px;
   .input-box {
-    display: flex;
     position: relative;
-    background-color: #ffffff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    &:focus {
-      box-shadow: 0 0 0 2px rgba(85, 133, 245, 0.2);
-    }
-    &:hover {
-      box-shadow: 0 0 0 2px rgba(85, 133, 245, 0.2);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    box-shadow: 0 2px 12px rgba(37, 99, 244, 0.06);
+    transition:
+      border-color 0.2s,
+      box-shadow 0.2s;
+
+    &:hover,
+    &:focus-within {
+      border-color: #c7d7fd;
+      box-shadow: 0 4px 16px rgba(37, 99, 244, 0.1);
     }
 
-    // 语音按钮
-    .mic-button {
-      padding: 13px 0 0 21px;
-      width: 41px;
-      height: 41px;
+    &.is-disabled {
+      background: #fafafa;
+    }
+
+    .input-main {
+      position: relative;
+      padding: 14px 16px 6px;
+    }
+
+    :deep(.n-input) {
+      --n-border: none !important;
+      --n-border-hover: none !important;
+      --n-border-focus: none !important;
+      --n-box-shadow-focus: none !important;
+      --n-padding-left: 4px;
+      --n-padding-right: 4px;
+      --n-padding-vertical: 8px;
+      --n-font-size: 15px;
+      --n-height: auto;
+      background: transparent !important;
+    }
+
+    :deep(.n-input .n-input-wrapper) {
+      padding: 0 !important;
+    }
+
+    :deep(.n-input .n-input__textarea-el) {
+      font-size: 15px !important;
+      line-height: 22px !important;
+      color: #1f2937;
+      padding: 8px 4px !important;
+      min-height: 38px !important;
+      box-sizing: border-box !important;
+    }
+
+    :deep(.n-input .n-input__placeholder) {
+      left: 4px !important;
+      right: 4px !important;
+      top: 8px !important;
+      bottom: auto !important;
+      font-size: 15px !important;
+      line-height: 22px !important;
+      color: #9ca3af !important;
+      display: block !important;
+      padding: 0 !important;
+      height: 22px !important;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    :deep(.n-input.n-input--disabled .n-input__textarea-el) {
+      cursor: not-allowed;
+      color: #9ca3af;
+    }
+
+    .input-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 12px 12px;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .toolbar-left {
+      flex: 1;
+    }
+
+    .tool-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: #4b5563;
       cursor: pointer;
-      transition: all 0.3s;
+      transition:
+        background-color 0.2s,
+        color 0.2s;
+
+      &:hover:not(.is-disabled) {
+        background: #f3f4f6;
+        color: #2563f4;
+      }
+
       &.recording {
+        color: #2563f4;
         animation: pulse 1.5s infinite;
       }
+
+      &.is-disabled {
+        color: #c4c8ce;
+        cursor: not-allowed;
+      }
     }
+
+    .send-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: #2563f4;
+      color: #fff;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition:
+        background-color 0.2s,
+        transform 0.15s,
+        opacity 0.2s;
+
+      &:hover:not(.is-disabled) {
+        background: #1d4ed8;
+        transform: translateY(-1px);
+      }
+
+      &:active:not(.is-disabled) {
+        transform: translateY(0);
+      }
+
+      &.is-disabled {
+        background: #d1d5db;
+        cursor: not-allowed;
+        transform: none;
+      }
+    }
+
     @keyframes pulse {
-      0% {
+      0%,
+      100% {
         opacity: 1;
       }
       50% {
         opacity: 0.5;
-      }
-      100% {
-        opacity: 1;
-      }
-    }
-    // 发送按钮
-    .send-class {
-      padding: 10px;
-      width: 41px;
-      height: 41px;
-      cursor: pointer;
-      &:hover {
-        background-color: #f5f5f5;
-      }
-    }
-    .disabled-send {
-      cursor: not-allowed;
-      &:hover {
-        background-color: #ffffff;
-      }
-    }
-    :deep(.n-input:hover) {
-      border-radius: 8px;
-      border: none;
-    }
-    :deep(.n-input:focus) {
-      border-radius: 8px;
-      border: none;
-    }
-    :deep(.n-input[disabled]) {
-      background-color: #ffffff;
-      cursor: not-allowed;
-    }
-    :deep(.n-input) {
-      &::-webkit-scrollbar {
-        width: 0;
-        height: 0;
-      }
-      scrollbar-width: none; /* Firefox */
-      -ms-overflow-style: none; /* IE 10+ */
-    }
-    textarea {
-      width: 100%;
-      flex: 1;
-      height: 80px;
-      padding: 10px;
-      border-radius: 8px;
-      border: none;
-      resize: none;
-      box-shadow: none;
-      &:focus {
-        border-radius: 8px;
-        border: none;
       }
     }
   }
@@ -723,11 +810,12 @@ onUnmounted(() => {
 .prompt-list {
   width: 100%;
   position: absolute;
-  bottom: 100%;
+  left: 0;
+  bottom: calc(100% + 8px);
   background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   z-index: 11;
   max-height: 200px;
   overflow-y: auto;
