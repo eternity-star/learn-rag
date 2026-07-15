@@ -11,29 +11,32 @@
           'return-message': !msg.isUser,
         }"
       >
-        <div v-if="msg.isUser" class="message-content">
-          <div style="display: flex; justify-content: space-between">
-            <div v-html="msg.content"></div>
-            <div class="author-photo ml5">
+        <div v-if="msg.isUser" class="message-content user-message-content">
+          <div class="user-message-row">
+            <div class="user-message-text" v-html="msg.content"></div>
+            <div class="author-photo">
               <img
                 v-if="userInfoMap && userInfoMap.headUrl"
                 :src="userInfoMap.headUrl"
                 alt=""
               />
-              <n-avatar v-else size="large" icon="user" />
+              <n-avatar v-else size="large">
+                <n-icon :component="UserOutlined" />
+              </n-avatar>
             </div>
           </div>
           <div class="message-time">{{ msg.time }}</div>
         </div>
-        <div v-else style="display: flex">
+        <div v-else class="return-message-row">
           <div class="author-photo">
             <img v-if="aiLogo" :src="aiLogo" alt="" />
-            <n-avatar v-else size="large" icon="user" />
+            <n-avatar v-else size="large">
+              <n-icon :component="UserOutlined" />
+            </n-avatar>
           </div>
           <div
             v-if="msg.isMsgLoading"
-            class="ml10"
-            style="display: flex; line-height: 43px"
+            class="return-message-body return-message-loading"
           >
             <span class="mr5">回答中</span>
             <div class="loading-dots">
@@ -42,7 +45,7 @@
               <span class="dot"></span>
             </div>
           </div>
-          <div v-else class="ml10 mt10" style="flex: 1">
+          <div v-else class="return-message-body">
             <div
               v-if="msg.isStream == 1 && parseFormat == 'html'"
               v-html="formatLinks(msg.content)"
@@ -147,6 +150,7 @@ import { WangEditor } from '@/components';
 import AudioOutlined from '~icons/ant-design/audio-outlined';
 import AudioFilled from '~icons/ant-design/audio-filled';
 import ArrowUpOutlined from '~icons/ant-design/arrow-up-outlined';
+import UserOutlined from '~icons/ant-design/user-outlined';
 
 const route = useRoute();
 const message = useMessage();
@@ -559,6 +563,19 @@ onUnmounted(() => {
   .return-message {
     max-width: 85% !important;
   }
+  .return-message-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .return-message-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .return-message-loading {
+    display: flex;
+    align-items: center;
+  }
   .message-bubble {
     max-width: 70%;
     margin-bottom: 15px;
@@ -567,12 +584,36 @@ onUnmounted(() => {
     &.user-message {
       background: #f6f6f6;
       margin-left: auto;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    .user-message-content {
+      min-width: 0;
+    }
+    .user-message-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 5px;
+      min-width: 0;
+    }
+    .user-message-text {
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .author-photo {
+      flex-shrink: 0;
     }
     .message-content {
       color: black;
       font-size: 14px;
       line-height: 1.5;
       white-space: pre-line; // 保留换行符
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     :deep(.return-content) {
       // max-width: 100%;
