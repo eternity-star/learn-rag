@@ -1,0 +1,23 @@
+---
+description: learn-rag 项目架构与编码约定（始终应用）
+alwaysApply: true
+---
+
+# learn-rag 项目上下文
+
+完整架构说明见仓库根目录 **`AGENTS.md`**。改代码前先对齐该文档。
+
+## 关键事实
+
+- 可运行代码目前只在 **`client/`**（Vue3 + Vite + TS + Naive UI + UnoCSS）。
+- `server/` 尚未创建；AI 聊天接口前缀为 **`/process/ai/*`**，流式用 **`fetchEventSource`**。
+- UnoCSS 工具类前缀 **`lrx-`**（如 `lrx-p-0`），配置在 `client/uno.config.ts`。
+- 核心业务：`client/src/views/ai-agent/`（`AiChat` → `ChatRecord` + `Chat`）。
+- `docs/` 被根 `.gitignore` 忽略，不要假设其中文档已入库。
+
+## 改代码时
+
+- 使用 `<script setup lang="ts">`，样式 `lang="less" scoped`。
+- UI 用 Naive UI；图标用 `~icons/ant-design/*`。
+- 保持现有目录与 barrel 导出（`@/components`）。
+- 详细模块职责、接口表、缺口清单以 `AGENTS.md` 为准。
