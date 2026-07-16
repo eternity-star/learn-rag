@@ -1,0 +1,6 @@
+packages:
+  - 'client'
+  - 'server'
+allowBuilds:
+  es5-ext: false
+  esbuild: true
