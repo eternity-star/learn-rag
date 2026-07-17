@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
+import chatRoutes from './routes/chat.js';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -9,6 +10,9 @@ const port = Number(process.env.PORT) || 3000;
 app.use(cors());
 // 解析 JSON 请求体（后面写 /api/chat 会用到）
 app.use(express.json());
+// 注册路由
+app.use(chatRoutes);
+
 // 健康检查：用来确认服务已启动
 app.get('/health', (_req, res) => {
   res.send('ok');
