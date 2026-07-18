@@ -7,7 +7,7 @@ const router = Router();
 /**
  * 非流式聊天
  */
-router.post('/api/chat', async (req, res) => {
+router.post('/api/chat/index', async (req, res) => {
   try {
     const messages = req.body?.messages as ChatMessage[] | undefined;
 

@@ -7,11 +7,14 @@
         :key="index"
         class="message-bubble"
         :class="{
-          'user-message': msg.isUser,
-          'return-message': !msg.isUser,
+          'user-message': msg.role === 'user',
+          'return-message': msg.role !== 'user',
         }"
       >
-        <div v-if="msg.isUser" class="message-content user-message-content">
+        <div
+          v-if="msg.role === 'user'"
+          class="message-content user-message-content"
+        >
           <div class="user-message-row">
             <div class="user-message-text" v-html="msg.content"></div>
             <div class="author-photo">
@@ -79,11 +82,7 @@
             :disabled="!isAllowInput"
             :bordered="false"
             :autosize="{ minRows: 1, maxRows: 8 }"
-            :placeholder="
-              selectedBusiness || isOnlyPage
-                ? '请向我提问或输入/查看提示词'
-                : '请先选择下方的业务对象'
-            "
+            placeholder="请向我提问或输入/查看提示词"
             @blur="handleInputBlur"
             @focus="handleInputFocus"
             @input="handlePromptInput"
@@ -228,17 +227,23 @@ function handlerMessageParams() {
   const params = {};
   if (isOnlyPage.value) {
     Object.assign(params, {
-      type: type.value,
-      aiType: aiType.value,
-      question: newMessage.value,
-      chatId: chatId.value,
-      isStream: isStream.value,
-      isAppendJson: isStream.value == '1' ? '0' : '1', //是否默认拼接json返回格式 1是 默认是
-      params: {
-        ...route.query,
-        [paramField.value || keyField.value]:
-          selectedRows.value?.map(it => it?.[keyField.value])?.join(',') || '',
-      },
+      messages: [
+        {
+          role: 'user',
+          content: newMessage.value,
+        },
+      ],
+      // type: type.value,
+      // aiType: aiType.value,
+      // question: newMessage.value,
+      // chatId: chatId.value,
+      // isStream: isStream.value,
+      // isAppendJson: isStream.value == '1' ? '0' : '1', //是否默认拼接json返回格式 1是 默认是
+      // params: {
+      //   ...route.query,
+      //   [paramField.value || keyField.value]:
+      //     selectedRows.value?.map(it => it?.[keyField.value])?.join(',') || '',
+      // },
     });
   } else {
     Object.assign(params, {
@@ -258,7 +263,7 @@ async function sendMessage() {
     // 添加用户消息
     messages.value.push({
       content: newMessage.value,
-      isUser: true,
+      role: 'user',
       time: new Date().toLocaleTimeString(),
     });
   }
@@ -274,7 +279,7 @@ async function sendMessage() {
     isStream: isOnlyPage.value
       ? isStream.value || 1
       : (selectedBusiness.value?.isStream ?? 1),
-    isUser: false,
+    role: 'assistant',
     time: '',
     isMsgLoading: false, // 消息是否显示加载中 当是流式返回json时需要等待全部数据返回后在停止渲染；当流式返回文本时不需要等待全部数据返回后在停止渲染
   };
@@ -282,9 +287,7 @@ async function sendMessage() {
   if (isTextMsg.value) {
     messages.value.push(aiReturnMsg);
   }
-  let url = isOnlyPage.value
-    ? '/process/ai/autoQuestionAiChat'
-    : '/process/ai/chatAi';
+  const url = '/api/chat/stream';
   isSending.value = true;
   aiReturnMsg.isMsgLoading = true;
   // 发送消息
@@ -305,6 +308,8 @@ async function sendMessage() {
         aiReturnMsg.isMsgLoading = false;
       }
       let value = res?.data || '';
+      if (!value || value === '[DONE]') return;
+
       try {
         let str = value?.replace('data:', '') || '';
         let obj = JSON.parse(str);

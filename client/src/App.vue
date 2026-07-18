@@ -1,20 +1,24 @@
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
-    <n-message-provider>
-      <n-dialog-provider>
-        <n-modal-provider>
-          <n-notification-provider>
-            <router-view />
-          </n-notification-provider>
-        </n-modal-provider>
-      </n-dialog-provider>
-    </n-message-provider>
+    <n-loading-bar-provider>
+      <n-message-provider>
+        <n-dialog-provider>
+          <n-modal-provider>
+            <n-notification-provider>
+              <AppProvider />
+              <router-view />
+            </n-notification-provider>
+          </n-modal-provider>
+        </n-dialog-provider>
+      </n-message-provider>
+    </n-loading-bar-provider>
   </n-config-provider>
 </template>
 <script setup lang="ts">
 import {
   NConfigProvider,
   NDialogProvider,
+  NLoadingBarProvider,
   NMessageProvider,
   NNotificationProvider,
 } from 'naive-ui';
@@ -22,6 +26,8 @@ import type { GlobalThemeOverrides } from 'naive-ui';
 import type { HeightStyle } from '@/types/system';
 import { createHoverColor, createPressedColor } from '@/utils/color';
 import { changeColor } from 'seemly';
+
+import { AppProvider } from '@/components';
 
 const primaryColor = ref('#2563F4');
 const heightStyle = ref<HeightStyle>('table-simple');
