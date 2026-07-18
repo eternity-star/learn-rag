@@ -274,7 +274,7 @@ async function sendMessage() {
   // 创建AbortController以支持中止请求
   controller.value = new AbortController();
 
-  let aiReturnMsg = {
+  const aiReturnMsg = reactive({
     content: '',
     isStream: isOnlyPage.value
       ? isStream.value || 1
@@ -282,7 +282,7 @@ async function sendMessage() {
     role: 'assistant',
     time: '',
     isMsgLoading: false, // 消息是否显示加载中 当是流式返回json时需要等待全部数据返回后在停止渲染；当流式返回文本时不需要等待全部数据返回后在停止渲染
-  };
+  });
   // 非json则正常返回渲染
   if (isTextMsg.value) {
     messages.value.push(aiReturnMsg);
@@ -320,7 +320,9 @@ async function sendMessage() {
             chatId.value = obj?.chat_id;
           }
           let stri = obj?.content;
-          aiReturnMsg.content += stri;
+          if (stri) {
+            aiReturnMsg.content += stri;
+          }
         }
       } catch (err) {
         console.log('[ err ] >', err);
