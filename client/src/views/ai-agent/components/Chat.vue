@@ -221,6 +221,10 @@ const isAllowSend = computed(() => {
 const isTextMsg = computed(() => {
   return selectedBusiness.value?.isStream == 1 || isStream.value == '1';
 });
+// 是否进页面就开始发送消息
+const isSendOnMount = computed(() => {
+  return isOnlyPage.value && isFirstSend.value && isSendType.value === '1';
+});
 
 // 处理消息参数
 function handlerMessageParams() {
@@ -255,7 +259,7 @@ function handlerMessageParams() {
 async function sendMessage() {
   if (!isAllowSend.value) return;
 
-  if (isOnlyPage.value && isFirstSend.value) {
+  if (isSendOnMount.value) {
     isFirstSend.value = false;
   } else {
     // 添加用户消息
@@ -542,7 +546,7 @@ watch(
 );
 
 onMounted(() => {
-  if (isSendType.value == '1') sendMessage();
+  if (isSendOnMount.value) sendMessage();
 });
 
 onUnmounted(() => {
