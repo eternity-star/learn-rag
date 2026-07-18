@@ -227,12 +227,10 @@ function handlerMessageParams() {
   const params = {};
   if (isOnlyPage.value) {
     Object.assign(params, {
-      messages: [
-        {
-          role: 'user',
-          content: newMessage.value,
-        },
-      ],
+      messages: messages.value.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      })),
       // type: type.value,
       // aiType: aiType.value,
       // question: newMessage.value,
