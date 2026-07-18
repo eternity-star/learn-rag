@@ -1,41 +1,54 @@
 # client
 
-This template should help get you started developing with Vue 3 in Vite.
+learn-rag 前端应用：Vue 3 + Vite + TypeScript + Naive UI。
 
-## Recommended IDE Setup
+## 环境要求
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+当前开发环境：
 
-## Recommended Browser Setup
+| 工具 | 版本 |
+|------|------|
+| Node.js | v24.15.0 |
+| pnpm | 11.1.1 |
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
+`package.json` 中 Node engines 约定为：`^22.18.0 || >=24.12.0`。请尽量对齐上表版本，避免依赖解析或构建差异。
+
+## 推荐 IDE
+
+[VS Code](https://code.visualstudio.com/) / Cursor + [Vue (Official) / Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar)（请禁用 Vetur）。
+
+## 推荐浏览器
+
+- Chromium 系（Chrome、Edge、Brave 等）：
   - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
+  - [开启 Chrome DevTools Custom Object Formatter](http://bit.ly/object-formatters)
+- Firefox：
   - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+  - [开启 Firefox DevTools Custom Object Formatter](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
 
-## Type Support for `.vue` Imports in TS
+## `.vue` 的 TypeScript 支持
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+TypeScript 默认无法处理 `.vue` 的类型信息，因此类型检查使用 `vue-tsc`，而不是直接用 `tsc`。编辑器侧需安装 Volar，才能让 TS 语言服务识别 `.vue` 类型。
 
-## Customize configuration
+## 配置说明
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+详见 [Vite 配置文档](https://vite.dev/config/)。
 
-## Project Setup
+## 项目启动
 
 ```sh
 pnpm install
 ```
 
-### Compile and Hot-Reload for Development
+### 开发（热更新）
 
 ```sh
 pnpm dev
 ```
 
-### Type-Check, Compile and Minify for Production
+开发服务默认端口：`1688`（见 `vite.config.ts`）。
+
+### 生产构建（类型检查 + 打包）
 
 ```sh
 pnpm build
