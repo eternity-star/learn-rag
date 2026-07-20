@@ -138,8 +138,8 @@
               v-else
               type="button"
               class="send-btn"
-              :class="{ 'is-disabled': !isAllowSend }"
-              :disabled="!isAllowSend"
+              :class="{ 'is-disabled': !isAllowSend || !newMessage }"
+              :disabled="!isAllowSend || !newMessage"
               @click.stop="sendMessage"
             >
               <n-icon :component="ArrowUpOutlined" :size="18" />
