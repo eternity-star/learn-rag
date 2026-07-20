@@ -126,6 +126,16 @@
               />
             </button>
             <button
+              v-if="isSending"
+              type="button"
+              class="send-btn stop-send-btn"
+              title="停止生成"
+              @click.stop="stopGeneration"
+            >
+              <n-icon :component="PauseCircleOutlined" :size="18" />
+            </button>
+            <button
+              v-else
               type="button"
               class="send-btn"
               :class="{ 'is-disabled': !isAllowSend }"
@@ -149,6 +159,7 @@ import { WangEditor } from '@/components';
 import AudioOutlined from '~icons/ant-design/audio-outlined';
 import AudioFilled from '~icons/ant-design/audio-filled';
 import ArrowUpOutlined from '~icons/ant-design/arrow-up-outlined';
+import PauseCircleOutlined from '~icons/ant-design/pause-circle-outlined';
 import UserOutlined from '~icons/ant-design/user-outlined';
 
 const route = useRoute();
@@ -194,6 +205,12 @@ const errorMsg = ref(null); // 错误信息
 const errorCount = ref(0); // 错误计数
 const maxErrorCount = ref(5); // 最大错误计数
 const controller = ref(null); // 用于中止请求
+/** 当前流式中的助手消息，停止生成时收尾用 */
+const currentStreamMsg = ref(null);
+/** 是否用户主动停止（与网络错误区分，避免覆盖已生成内容） */
+const isUserStopped = ref(false);
+/** 本轮流式是否已收尾，防止 stop / onclose / onerror 重复改状态 */
+const streamSettled = ref(false);
 
 const showPrompts = ref(false);
 const filteredPrompts = ref([]);
@@ -256,8 +273,41 @@ function handlerMessageParams() {
   }
   return params;
 }
+/** 流式结束收尾：保证只执行一次，避免 stop / onclose / onerror 互相打乱状态 */
+function finalizeStreamMsg(
+  aiReturnMsg: {
+    content: string;
+    time: string;
+    isMsgLoading: boolean;
+  } | null,
+  options: { aborted?: boolean; errorText?: string } = {},
+) {
+  if (streamSettled.value) return;
+  streamSettled.value = true;
+
+  if (aiReturnMsg) {
+    aiReturnMsg.isMsgLoading = false;
+    if (!aiReturnMsg.time) {
+      aiReturnMsg.time = new Date().toLocaleTimeString();
+    }
+    if (options.errorText && !options.aborted) {
+      aiReturnMsg.content = options.errorText;
+    } else if (options.aborted) {
+      aiReturnMsg.content += `${aiReturnMsg.content ? '\n' : ''}已停止生成`;
+    }
+  }
+
+  isSending.value = false;
+  newMessage.value = '';
+  currentStreamMsg.value = null;
+}
+
 async function sendMessage() {
   if (!isAllowSend.value) return;
+
+  if (isRecording.value) {
+    await stopRecording();
+  }
 
   if (isSendOnMount.value) {
     isFirstSend.value = false;
@@ -275,6 +325,8 @@ async function sendMessage() {
   if (!params) return;
   // 创建AbortController以支持中止请求
   controller.value = new AbortController();
+  isUserStopped.value = false;
+  streamSettled.value = false;
 
   const aiReturnMsg = reactive({
     content: '',
@@ -285,6 +337,7 @@ async function sendMessage() {
     time: '',
     isMsgLoading: false, // 消息是否显示加载中 当是流式返回json时需要等待全部数据返回后在停止渲染；当流式返回文本时不需要等待全部数据返回后在停止渲染
   });
+  currentStreamMsg.value = aiReturnMsg;
   // 非json则正常返回渲染
   if (isTextMsg.value) {
     messages.value.push(aiReturnMsg);
@@ -306,6 +359,7 @@ async function sendMessage() {
     }),
     // 接收流式数据
     onmessage(res) {
+      if (streamSettled.value) return;
       if (isTextMsg.value) {
         aiReturnMsg.isMsgLoading = false;
       }
@@ -334,35 +388,52 @@ async function sendMessage() {
     // 链接关闭
     onclose() {
       console.log('连接已关闭');
-      aiReturnMsg.time = new Date().toLocaleTimeString();
-
+      if (streamSettled.value) return;
+      if (isUserStopped.value) {
+        finalizeStreamMsg(aiReturnMsg, { aborted: true });
+        return;
+      }
       // json则全部返回后处理渲染
       if (selectedBusiness.value?.isStream == 0) {
         handlerJsonObj(aiReturnMsg);
       }
-      isSending.value = false;
-      aiReturnMsg.isMsgLoading = false;
-      newMessage.value = '';
-      abortFetch?.();
+      finalizeStreamMsg(aiReturnMsg);
     },
     // 处理报错信息
     onerror(err) {
       console.log('错误', err);
-      isSending.value = false;
-      aiReturnMsg.content =
-        '抱歉，没有查找到相关内容，请重新描述您的问题或提供更多信息。';
-      aiReturnMsg.isMsgLoading = false;
-      if (err.name === 'AbortError') {
-        console.log('请求被中止');
-        errorMsg.value = '服务器繁忙，请稍后再试';
-      } else {
-        errorMsg.value = err.message; // 显示错误信息
+      const aborted =
+        isUserStopped.value ||
+        err?.name === 'AbortError' ||
+        !!controller.value?.signal?.aborted;
+
+      if (aborted) {
+        finalizeStreamMsg(aiReturnMsg, { aborted: true });
+        // 不 throw，避免 fetch-event-source 自动重试
+        return;
       }
-      abortFetch?.();
+
+      finalizeStreamMsg(aiReturnMsg, {
+        errorText:
+          '抱歉，没有查找到相关内容，请重新描述您的问题或提供更多信息。',
+      });
+      errorMsg.value = err?.message || '请求失败';
+      // 抛出以结束连接；若需重试可按库约定调整
       throw err;
     },
   });
 }
+
+/** 用户点击停止生成 */
+function stopGeneration() {
+  if (!isSending.value || streamSettled.value) return;
+  isUserStopped.value = true;
+  const msg = currentStreamMsg.value;
+  // 先收尾 UI，再 abort，避免 onerror 覆盖已生成内容
+  finalizeStreamMsg(msg, { aborted: true });
+  controller.value?.abort?.();
+}
+
 //中断请求
 function abortFetch() {
   console.log('[ "中断请求" ] >', '中断请求');
@@ -810,6 +881,14 @@ onUnmounted(() => {
 
       &:active:not(.is-disabled) {
         transform: translateY(0);
+      }
+
+      &.stop-send-btn {
+        background: #ef4444;
+
+        &:hover {
+          background: #dc2626;
+        }
       }
 
       &.is-disabled {
