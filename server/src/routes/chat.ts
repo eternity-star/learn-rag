@@ -1,6 +1,19 @@
 import { Router } from 'express';
 import { type ChatMessage } from '../services/deepseek.js';
 import { chatCompletion, chatCompletionStream } from '../services/deepseek.js';
+import {
+  createHttpError,
+  getErrorMessage,
+  getErrorStatus,
+} from '../utils/errors.js';
+import {
+  getStreamChunkError,
+  getStreamDelta,
+  initSseHeaders,
+  writeSseContent,
+  writeSseDone,
+  writeSseError,
+} from '../utils/sse.js';
 
 const router = Router();
 
@@ -20,12 +33,16 @@ router.post('/api/chat/index', async (req, res) => {
     res.json({ content });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '调用模型失败' });
+    res.status(getErrorStatus(err)).json({ error: getErrorMessage(err) });
   }
 });
 
 /**
  * SSE流式聊天
+ *
+ * 注意：OpenAI SDK 在 stream:true 时，`create()` 成功只代表「流对象创建成功」，
+ * 鉴权/模型错误经常在第一次读取 chunk（iterator.next）时才抛出。
+ * 因此必须先拉取第一块，再 flush SSE 响应头，否则前端永远看到 HTTP 200。
  */
 router.post('/api/chat/stream', async (req, res) => {
   try {
@@ -36,37 +53,55 @@ router.post('/api/chat/stream', async (req, res) => {
       return;
     }
 
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    // 有些代理（如 nginx）默认会缓冲，这行可减少缓冲（本地也可写上）
-    res.flushHeaders?.();
-
     const stream = await chatCompletionStream(messages);
-    // 逐块读取模型输出
-    for await (const chunk of stream) {
-      // OpenAI 兼容协议：文字在 choices[0].delta.content
-      const delta = chunk.choices[0]?.delta?.content;
-      if (!delta) continue;
-      // SSE 格式：一行 data: + JSON，再空一行
-      res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+    const iterator = stream[Symbol.asyncIterator]();
+
+    // 关键：先读第一块。无效 Key / 上游 4xx 多数在这里抛错。
+    const first = await iterator.next();
+
+    initSseHeaders(res);
+
+    let hasContent = false;
+
+    // 依赖本请求的 res / hasContent，留在路由闭包内，不要提到模块顶层
+    const handleChunk = (chunk: unknown) => {
+      const chunkError = getStreamChunkError(chunk);
+      if (chunkError) {
+        throw createHttpError(chunkError, 500);
+      }
+      const delta = getStreamDelta(chunk);
+      if (!delta) return;
+      hasContent = true;
+      writeSseContent(res, delta);
+    };
+
+    if (!first.done) {
+      handleChunk(first.value);
     }
 
-    // 约定：发完用 [DONE] 标记结束（前端可据此停止）
-    res.write('data: [DONE]\n\n');
-    res.end();
-  } catch (err) {
-    console.error(err);
+    while (true) {
+      const { done, value } = await iterator.next();
+      if (done) break;
+      handleChunk(value);
+    }
 
-    // 若响应头还没发出去，可以正常返回 JSON 错误
-    if (!res.headersSent) {
-      res.status(500).json({ error: '调用模型失败' });
+    if (!hasContent) {
+      // 上游给了“空成功流”（错误 Key 时部分网关会这样），对前端仍应视为失败
+      writeSseError(res, '模型未返回任何内容，请检查 API Key / 模型配置后重试');
       return;
     }
 
-    // 若已经开始流式输出，就写一条错误再结束
-    res.write(`data: ${JSON.stringify({ error: '调用模型失败' })}\n\n`);
-    res.end();
+    writeSseDone(res);
+  } catch (err) {
+    console.error(err);
+    const error = getErrorMessage(err);
+
+    if (!res.headersSent) {
+      res.status(getErrorStatus(err)).json({ error });
+      return;
+    }
+
+    writeSseError(res, error);
   }
 });
 

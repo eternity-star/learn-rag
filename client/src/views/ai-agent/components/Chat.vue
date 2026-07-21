@@ -54,16 +54,19 @@
               v-html="formatLinks(msg.content)"
               v-viewer
               class="message-content return-content"
+              :class="{ 'is-error': msg.isError }"
             ></div>
             <div
               v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
               class="message-content return-content"
+              :class="{ 'is-error': msg.isError }"
             >
               <WangEditor v-model:value="msg.content" v-viewer />
             </div>
             <div
               v-else-if="msg.isStream == 0"
               class="message-content return-content"
+              :class="{ 'is-error': msg.isError }"
             >
               {{ msg.content }}
             </div>
@@ -82,7 +85,11 @@
             :disabled="!isAllowInput"
             :bordered="false"
             :autosize="{ minRows: 1, maxRows: 8 }"
-            placeholder="请向我提问或输入/查看提示词"
+            :placeholder="
+              pendingRetry
+                ? '发送失败，点击发送可重试上一句'
+                : '请向我提问或输入/查看提示词'
+            "
             @blur="handleInputBlur"
             @focus="handleInputFocus"
             @input="handlePromptInput"
@@ -140,6 +147,7 @@
               class="send-btn"
               :class="{ 'is-disabled': !isAllowSend || !newMessage }"
               :disabled="!isAllowSend || !newMessage"
+              :title="pendingRetry ? '重试上一句' : '发送'"
               @click.stop="sendMessage"
             >
               <n-icon :component="ArrowUpOutlined" :size="18" />
@@ -211,6 +219,8 @@ const currentStreamMsg = ref(null);
 const isUserStopped = ref(false);
 /** 本轮流式是否已收尾，防止 stop / onclose / onerror 重复改状态 */
 const streamSettled = ref(false);
+/** 上一轮失败，等待用发送按钮重试（不重复插用户气泡） */
+const pendingRetry = ref(false);
 
 const showPrompts = ref(false);
 const filteredPrompts = ref([]);
@@ -273,14 +283,61 @@ function handlerMessageParams() {
   }
   return params;
 }
+
+function getLastUserContent() {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    const msg = messages.value[i];
+    if (msg?.role === 'user') return msg.content || '';
+  }
+  return '';
+}
+
+/** 去掉末尾失败的助手气泡，避免重试时带着错误文案进请求 / 多一条气泡 */
+function removeTrailingErrorAssistant() {
+  const list = messages.value;
+  while (list.length) {
+    const last = list[list.length - 1];
+    if (last?.role === 'assistant' && last?.isError) {
+      list.pop();
+      continue;
+    }
+    break;
+  }
+}
+
+function resolveStreamErrorTip(err: unknown) {
+  const raw = String((err as any)?.message || err || '');
+  if (/content-type|text\/event-stream/i.test(raw)) {
+    return '服务未返回流式响应，请检查后端后重试';
+  }
+  if (/Failed to fetch|NetworkError|network|ERR_CONNECTION/i.test(raw)) {
+    return '网络异常，请检查网络后重试';
+  }
+  if (/timeout|timed out/i.test(raw)) {
+    return '请求超时，请稍后重试';
+  }
+  if (/401|unauthorized|api.?key/i.test(raw)) {
+    return '模型鉴权失败，请检查 API Key 配置';
+  }
+  if (/429|rate limit/i.test(raw)) {
+    return '请求过于频繁，请稍后重试';
+  }
+  return raw ? `模型调用失败：${raw}` : '模型调用失败，请稍后重试';
+}
+
 /** 流式结束收尾：保证只执行一次，避免 stop / onclose / onerror 互相打乱状态 */
 function finalizeStreamMsg(
   aiReturnMsg: {
     content: string;
     time: string;
     isMsgLoading: boolean;
+    isError?: boolean;
   } | null,
-  options: { aborted?: boolean; errorText?: string } = {},
+  options: {
+    aborted?: boolean;
+    errorText?: string;
+    keepInputForRetry?: boolean;
+  } = {},
 ) {
   if (streamSettled.value) return;
   streamSettled.value = true;
@@ -291,6 +348,7 @@ function finalizeStreamMsg(
       aiReturnMsg.time = new Date().toLocaleTimeString();
     }
     if (options.errorText && !options.aborted) {
+      aiReturnMsg.isError = true;
       aiReturnMsg.content = options.errorText;
     } else if (options.aborted) {
       aiReturnMsg.content += `${aiReturnMsg.content ? '\n' : ''}已停止生成`;
@@ -298,8 +356,15 @@ function finalizeStreamMsg(
   }
 
   isSending.value = false;
-  newMessage.value = '';
   currentStreamMsg.value = null;
+
+  if (options.keepInputForRetry) {
+    pendingRetry.value = true;
+    newMessage.value = getLastUserContent();
+  } else {
+    pendingRetry.value = false;
+    newMessage.value = '';
+  }
 }
 
 async function sendMessage() {
@@ -309,10 +374,23 @@ async function sendMessage() {
     await stopRecording();
   }
 
-  if (isSendOnMount.value) {
+  const inputText = newMessage.value?.trim?.() || '';
+  const lastUserContent = getLastUserContent();
+  // 失败后点发送：同一句则重试，不重复插用户气泡
+  const isRetry =
+    pendingRetry.value &&
+    !!inputText &&
+    inputText === String(lastUserContent).trim();
+
+  if (isRetry) {
+    removeTrailingErrorAssistant();
+    pendingRetry.value = false;
+  } else if (isSendOnMount.value) {
     isFirstSend.value = false;
+    pendingRetry.value = false;
   } else {
-    // 添加用户消息
+    pendingRetry.value = false;
+    // 若用户改写了内容再发，当作新问题；失败助手气泡保留在历史中
     messages.value.push({
       content: newMessage.value,
       role: 'user',
@@ -336,6 +414,7 @@ async function sendMessage() {
     role: 'assistant',
     time: '',
     isMsgLoading: false, // 消息是否显示加载中 当是流式返回json时需要等待全部数据返回后在停止渲染；当流式返回文本时不需要等待全部数据返回后在停止渲染
+    isError: false,
   });
   currentStreamMsg.value = aiReturnMsg;
   // 非json则正常返回渲染
@@ -375,6 +454,18 @@ async function sendMessage() {
           if (obj?.chat_id && (selectedBusiness.value || isOnlyPage.value)) {
             chatId.value = obj?.chat_id;
           }
+          // 流里带业务错误
+          if (obj?.error) {
+            const tip = resolveStreamErrorTip(obj.error);
+            aiReturnMsg.isError = true;
+            finalizeStreamMsg(aiReturnMsg, {
+              errorText: tip,
+              keepInputForRetry: true,
+            });
+            message.error(tip);
+            controller.value?.abort?.();
+            return;
+          }
           let stri = obj?.content;
           if (stri) {
             aiReturnMsg.content += stri;
@@ -409,16 +500,19 @@ async function sendMessage() {
 
       if (aborted) {
         finalizeStreamMsg(aiReturnMsg, { aborted: true });
-        // 不 throw，避免 fetch-event-source 自动重试
+        // 不 throw，避免在 abort 场景误判；signal.aborted 时库不会重试
         return;
       }
 
+      const tip = resolveStreamErrorTip(err);
+      aiReturnMsg.isError = true;
       finalizeStreamMsg(aiReturnMsg, {
-        errorText:
-          '抱歉，没有查找到相关内容，请重新描述您的问题或提供更多信息。',
+        errorText: tip,
+        keepInputForRetry: true,
       });
-      errorMsg.value = err?.message || '请求失败';
-      // 抛出以结束连接；若需重试可按库约定调整
+      errorMsg.value = tip;
+      message.error(tip);
+      // throw 表示致命错误，阻止 fetch-event-source 自动重连
       throw err;
     },
   });
@@ -428,6 +522,7 @@ async function sendMessage() {
 function stopGeneration() {
   if (!isSending.value || streamSettled.value) return;
   isUserStopped.value = true;
+  pendingRetry.value = false;
   const msg = currentStreamMsg.value;
   // 先收尾 UI，再 abort，避免 onerror 覆盖已生成内容
   finalizeStreamMsg(msg, { aborted: true });
@@ -702,6 +797,10 @@ onUnmounted(() => {
       word-wrap: break-word;
       img {
         max-width: 100% !important;
+      }
+
+      &.is-error {
+        color: #dc2626;
       }
     }
     .message-time {
