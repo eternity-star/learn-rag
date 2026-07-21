@@ -9,7 +9,7 @@ import type { AxiosResponse } from 'axios';
  */
 export const chatIndex = (
   messages: ChatMessage[],
-): Promise<AxiosResponse<{ content: string }>> => {
+): Promise<AxiosResponse<ChatMessage>> => {
   return http.request({
     url: '/chat/index',
     method: 'POST',

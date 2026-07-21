@@ -2,78 +2,79 @@
   <div class="ai-agent-self">
     <!-- 新增消息展示区域 -->
     <div class="message-list" ref="messageContainer">
-      <div
-        v-for="(msg, index) in messages"
-        :key="index"
-        class="message-bubble"
-        :class="{
-          'user-message': msg.role === 'user',
-          'return-message': msg.role !== 'user',
-        }"
-      >
+      <template v-for="(msg, index) in messages" :key="index">
         <div
-          v-if="msg.role === 'user'"
-          class="message-content user-message-content"
+          v-if="msg.role !== 'system'"
+          class="message-bubble"
+          :class="{
+            'user-message': msg.role === 'user',
+            'return-message': msg.role === 'assistant',
+          }"
         >
-          <div class="user-message-row">
-            <div class="user-message-text" v-html="msg.content"></div>
+          <div
+            v-if="msg.role === 'user'"
+            class="message-content user-message-content"
+          >
+            <div class="user-message-row">
+              <div class="user-message-text" v-html="msg.content"></div>
+              <div class="author-photo">
+                <img
+                  v-if="userInfoMap && userInfoMap.headUrl"
+                  :src="userInfoMap.headUrl"
+                  alt=""
+                />
+                <n-avatar v-else size="large">
+                  <n-icon :component="UserOutlined" />
+                </n-avatar>
+              </div>
+            </div>
+            <div class="message-time">{{ msg.time }}</div>
+          </div>
+          <div v-else class="return-message-row">
             <div class="author-photo">
-              <img
-                v-if="userInfoMap && userInfoMap.headUrl"
-                :src="userInfoMap.headUrl"
-                alt=""
-              />
+              <img v-if="aiLogo" :src="aiLogo" alt="" />
               <n-avatar v-else size="large">
                 <n-icon :component="UserOutlined" />
               </n-avatar>
             </div>
-          </div>
-          <div class="message-time">{{ msg.time }}</div>
-        </div>
-        <div v-else class="return-message-row">
-          <div class="author-photo">
-            <img v-if="aiLogo" :src="aiLogo" alt="" />
-            <n-avatar v-else size="large">
-              <n-icon :component="UserOutlined" />
-            </n-avatar>
-          </div>
-          <div
-            v-if="msg.isMsgLoading"
-            class="return-message-body return-message-loading"
-          >
-            <span class="mr5">回答中</span>
-            <div class="loading-dots">
-              <span class="dot"></span>
-              <span class="dot"></span>
-              <span class="dot"></span>
-            </div>
-          </div>
-          <div v-else class="return-message-body">
             <div
-              v-if="msg.isStream == 1 && parseFormat == 'html'"
-              v-html="formatLinks(msg.content)"
-              v-viewer
-              class="message-content return-content"
-              :class="{ 'is-error': msg.isError }"
-            ></div>
-            <div
-              v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
-              class="message-content return-content"
-              :class="{ 'is-error': msg.isError }"
+              v-if="msg.isMsgLoading"
+              class="return-message-body return-message-loading"
             >
-              <WangEditor v-model:value="msg.content" v-viewer />
+              <span class="mr5">回答中</span>
+              <div class="loading-dots">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+              </div>
             </div>
-            <div
-              v-else-if="msg.isStream == 0"
-              class="message-content return-content"
-              :class="{ 'is-error': msg.isError }"
-            >
-              {{ msg.content }}
+            <div v-else class="return-message-body">
+              <div
+                v-if="msg.isStream == 1 && parseFormat == 'html'"
+                v-html="formatLinks(msg.content)"
+                v-viewer
+                class="message-content return-content"
+                :class="{ 'is-error': msg.isError }"
+              ></div>
+              <div
+                v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
+                class="message-content return-content"
+                :class="{ 'is-error': msg.isError }"
+              >
+                <WangEditor v-model:value="msg.content" v-viewer />
+              </div>
+              <div
+                v-else-if="msg.isStream == 0"
+                class="message-content return-content"
+                :class="{ 'is-error': msg.isError }"
+              >
+                {{ msg.content }}
+              </div>
+              <div class="message-time">{{ msg.time }}</div>
             </div>
-            <div class="message-time">{{ msg.time }}</div>
           </div>
         </div>
-      </div>
+      </template>
     </div>
     <!-- 输入区域 -->
     <div class="input-area">
@@ -115,7 +116,18 @@
           </div>
         </div>
         <div class="input-toolbar">
-          <div class="toolbar-left"></div>
+          <div class="toolbar-left">
+            <n-select
+              v-model:value="systemPromptKey"
+              class="system-prompt-select"
+              size="small"
+              :options="SYSTEM_PROMPT_OPTIONS"
+              :disabled="!isAllowInput"
+              placeholder="角色"
+              clearable
+              @update:value="syncSystemMessage"
+            />
+          </div>
           <div class="toolbar-right">
             <button
               type="button"
@@ -163,6 +175,11 @@ import { useRoute } from 'vue-router';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { isJSON } from '@/utils/obj';
 import { WangEditor } from '@/components';
+import type { ChatMessage, SystemPromptKey } from '@/types/chat';
+import {
+  SYSTEM_PROMPT_CONTENT,
+  SYSTEM_PROMPT_OPTIONS,
+} from '@/constants/system-prompt';
 
 import AudioOutlined from '~icons/ant-design/audio-outlined';
 import AudioFilled from '~icons/ant-design/audio-filled';
@@ -196,9 +213,39 @@ const isFirstSend = ref(true); // 是否第一次发送消息
 const selectedRows = ref([]); // 外面列表 选中的行数据
 // const aiLogo = ref(require('../../../assets/image/ai/logo.png'));
 const aiLogo = ref('');
-const messages = ref([]); // 消息列表
+const messages = ref<ChatMessage[]>([]); // 消息列表
 const newMessage = ref(''); // 输入框内容
 const isSending = ref(false); // 发送状态
+
+const systemPromptKey = ref<SystemPromptKey>(null);
+
+/**
+ * 同步 messages 最前面的 system 消息：
+ * - 有选中：没有则 unshift，已有则只改 content
+ * - 清空：去掉最前面的 system，不重复堆积
+ */
+function syncSystemMessage() {
+  const list = messages.value;
+  const key = systemPromptKey.value;
+  const content = key ? SYSTEM_PROMPT_CONTENT[key] : '';
+  const hasLeadingSystem = list[0]?.role === 'system';
+
+  if (!content) {
+    if (hasLeadingSystem) {
+      list.shift();
+    }
+    return;
+  }
+
+  if (hasLeadingSystem) {
+    list[0].content = content;
+  } else {
+    list.unshift({
+      role: 'system',
+      content,
+    });
+  }
+}
 const userInfoMap = ref({}); // 用户数据
 const isRecording = ref(false); //是否在语音识别文字中
 const oldMessage = ref(''); // 旧消息
@@ -255,6 +302,9 @@ const isSendOnMount = computed(() => {
 
 // 处理消息参数
 function handlerMessageParams() {
+  // 每次发请求前再同步一次，保证对话过程中 system 始终唯一且在最前
+  syncSystemMessage();
+
   const params = {};
   if (isOnlyPage.value) {
     Object.assign(params, {
@@ -327,12 +377,7 @@ function resolveStreamErrorTip(err: unknown) {
 
 /** 流式结束收尾：保证只执行一次，避免 stop / onclose / onerror 互相打乱状态 */
 function finalizeStreamMsg(
-  aiReturnMsg: {
-    content: string;
-    time: string;
-    isMsgLoading: boolean;
-    isError?: boolean;
-  } | null,
+  aiReturnMsg: ChatMessage | null,
   options: {
     aborted?: boolean;
     errorText?: string;
@@ -921,6 +966,10 @@ onUnmounted(() => {
 
     .toolbar-left {
       flex: 1;
+    }
+
+    .system-prompt-select {
+      width: 120px;
     }
 
     .tool-btn {
