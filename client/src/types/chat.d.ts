@@ -11,4 +11,10 @@ export type ChatMessage = {
 };
 
 /** System Prompt 选项 key；null 表示不使用 */
-export type SystemPromptKey = 'concise' | 'detailed' | 'translate' | null;
+export type SystemPromptKey =
+  | 'concise'
+  | 'detailed'
+  | 'translate'
+  | 'structured'
+  | null;
+
