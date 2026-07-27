@@ -12,12 +12,7 @@ export type Chunk = {
  * @param overlap 下一段往回重叠多少字
  * @returns 切好的片段数组
  */
-export function chunkText(
-  source: string,
-  text: string,
-  size = 400,
-  overlap = 50,
-): Chunk[] {
+export function chunkText(source: string, text: string, size = 400, overlap = 50): Chunk[] {
   /**
    * 为什么需要overlap？
    * 把一篇长文切成多段，相邻段有一点重叠，避免句子被拦腰切断后检索丢上下文。
@@ -34,6 +29,10 @@ export function chunkText(
   let start = 0; // 当前切片的起始位置
   let index = 0; // 片段序号，从 1 开始
 
+  // 2.1 获取标题，作为前缀
+  const h1 = cleaned.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? '';
+  const prefix = h1 ? `文档：${source}（${h1}）\n\n` : `文档：${source}\n\n`;
+
   // 3. 滑动窗口往前切
   while (start < cleaned.length) {
     const end = Math.min(start + size, cleaned.length);
@@ -44,7 +43,7 @@ export function chunkText(
         // id 要唯一：文件名 + 序号
         id: `${source}#${index}`,
         source,
-        text: piece,
+        text: `${prefix}${piece}`,
       });
       index++;
     }
