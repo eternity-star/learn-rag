@@ -764,14 +764,20 @@ onUnmounted(() => {
 <style lang="less" scoped>
 .ai-agent-self {
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   background: linear-gradient(135deg, #cadbfa 0%, #e5ecfc 50%, #ebe1fe 100%);
 }
 .message-list {
-  flex: 1; // 占据剩余空间
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 20px;
+  box-sizing: border-box;
   .return-message {
     max-width: 85% !important;
   }
@@ -828,8 +834,7 @@ onUnmounted(() => {
       word-break: break-word;
     }
     :deep(.return-content) {
-      // max-width: 100%;
-      max-width: 75vw;
+      max-width: 100%;
       white-space: pre-line; // 保留换行符
       word-wrap: break-word;
       img {
@@ -849,6 +854,8 @@ onUnmounted(() => {
       margin-top: 12px;
       padding-top: 10px;
       border-top: 1px dashed #e5e7eb;
+      max-width: 100%;
+      min-width: 0;
     }
     .citations-title {
       display: flex;
@@ -877,11 +884,14 @@ onUnmounted(() => {
       display: flex;
       align-items: center;
       gap: 8px;
+      max-width: 100%;
+      min-width: 0;
       padding: 6px 10px;
       margin-bottom: 6px;
       background: rgba(255, 255, 255, 0.72);
       border: 1px solid #eef2f7;
       border-radius: 8px;
+      overflow: hidden;
       transition:
         border-color 0.15s,
         background-color 0.15s;
@@ -957,6 +967,7 @@ onUnmounted(() => {
   }
 }
 .input-area {
+  flex-shrink: 0;
   padding: 16px 20px 20px;
   .input-box {
     position: relative;

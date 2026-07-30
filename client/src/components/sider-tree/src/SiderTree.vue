@@ -59,6 +59,12 @@ const { height, minLeftWidth, maxLeftWidth } = toRefs(props);
     padding: 10px;
     box-sizing: border-box;
 
+    :deep(> *) {
+      height: 100%;
+      min-height: 0;
+      box-sizing: border-box;
+    }
+
     .template-header {
       margin-bottom: 10px;
     }
