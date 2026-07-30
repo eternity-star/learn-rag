@@ -2,20 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chunkText } from './chunk.ts';
 import { embedText } from './embedding.ts';
-
-export type IndexedChunk = {
-  id: string;
-  source: string;
-  text: string;
-  embedding: number[];
-};
-
-export type RetrieveHit = {
-  id: string;
-  source: string;
-  text: string;
-  score: number;
-};
+import type { IndexedChunk, RetrieveHit } from '../types/chunk.js';
 
 export class Indexer {
   private docsDir: string = path.resolve(import.meta.dirname, '../../data/docs');

@@ -1,8 +1,4 @@
-export type Chunk = {
-  id: string;
-  source: string; // 文件名，如 "rag简介.md"
-  text: string;
-};
+import type { Chunk } from '../types/chunk.js';
 
 /**
  * 按固定字数切分文本
