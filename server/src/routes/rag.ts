@@ -24,16 +24,32 @@ router.post('/api/rag/stream', async (req, res) => {
       return;
     }
 
-    const question = messages[messages.length - 1].content;
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const question = lastUser?.content?.trim();
+    if (!question) {
+      res.status(400).json({ error: '缺少用户问题' });
+      return;
+    }
     const hits = await retrieve(question, 3);
-    messages.unshift({
-      role: 'system',
-      content: `你是知识库助手。只根据「参考资料」回答；资料不足就说不知道，不要编造。
+    const hitsText = hits.map((h, i) => `[${i + 1}] (${h.source}) ${h.text}`).join('\n\n');
+    const ragSystemPrompt = `你是知识库助手。只根据「参考资料」回答；资料不足就说不知道，不要编造。
 参考资料：
-${hits.map((h, i) => `[${i + 1}] (${h.source}) ${h.text}`).join('\n\n')}`,
-    });
+${hitsText}`;
 
-    const stream = await chatCompletionStream(messages);
+    const clientSystem = messages.find((m) => m.role === 'system');
+    const mergedSystem: ChatMessage = {
+      role: 'system',
+      content: clientSystem?.content
+        ? `${clientSystem.content}\n\n${ragSystemPrompt}`
+        : ragSystemPrompt,
+    };
+
+    const chatMessages: ChatMessage[] = [
+      mergedSystem,
+      ...messages.filter((m) => m.role !== 'system'),
+    ];
+
+    const stream = await chatCompletionStream(chatMessages);
     const iterator = stream[Symbol.asyncIterator]();
 
     // 关键：先读第一块。无效 Key / 上游 4xx 多数在这里抛错。
