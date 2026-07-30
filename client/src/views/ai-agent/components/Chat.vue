@@ -60,6 +60,24 @@
               >
                 {{ msg.content }}
               </div>
+              <div v-if="msg.citations?.length" class="citations">
+                <div class="citations-title">
+                  <n-icon :component="FileTextOutlined" :size="14" />
+                  <span>参考来源</span>
+                  <span class="citations-count">{{ msg.citations.length }}</span>
+                </div>
+                <div
+                  v-for="(c, ci) in msg.citations"
+                  :key="c.id"
+                  class="citation-item"
+                  :title="`${c.source}\n${c.text}`"
+                >
+                  <div class="citation-index">{{ ci + 1 }}</div>
+                  <span class="citation-source">{{ c.source }}</span>
+                  <span class="citation-text">{{ c.text }}</span>
+                  <span class="citation-score">{{ c.score.toFixed(3) }}</span>
+                </div>
+              </div>
               <div class="message-time">{{ msg.time }}</div>
             </div>
           </div>
@@ -153,7 +171,7 @@ import { useRoute } from 'vue-router';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { isJSON } from '@/utils/obj';
 import { WangEditor } from '@/components';
-import type { ChatMessage, SystemPromptKey } from '@/types/chat';
+import type { ChatMessage, RagCitation, SystemPromptKey } from '@/types/chat';
 import { SYSTEM_PROMPT_CONTENT, SYSTEM_PROMPT_OPTIONS } from '@/constants/system-prompt';
 
 import AudioOutlined from '~icons/ant-design/audio-outlined';
@@ -161,6 +179,7 @@ import AudioFilled from '~icons/ant-design/audio-filled';
 import ArrowUpOutlined from '~icons/ant-design/arrow-up-outlined';
 import PauseCircleOutlined from '~icons/ant-design/pause-circle-outlined';
 import UserOutlined from '~icons/ant-design/user-outlined';
+import FileTextOutlined from '~icons/ant-design/file-text-outlined';
 
 const route = useRoute();
 const message = useMessage();
@@ -429,6 +448,7 @@ async function sendMessage() {
     time: '',
     isMsgLoading: false, // 消息是否显示加载中 当是流式返回json时需要等待全部数据返回后在停止渲染；当流式返回文本时不需要等待全部数据返回后在停止渲染
     isError: false,
+    citations: [] as RagCitation[],
   });
   currentStreamMsg.value = aiReturnMsg;
   // 非json则正常返回渲染
@@ -464,6 +484,13 @@ async function sendMessage() {
         let obj = JSON.parse(str);
         if (obj) {
           obj = isJSON(obj) ? JSON.parse(obj) : obj;
+          console.log('%c [ obj ]-477', 'font-size:13px; background:pink; color:#bf2c9f;', obj);
+
+          // 处理引用
+          if (obj?.citations && Array.isArray(obj.citations)) {
+            aiReturnMsg.citations = obj.citations;
+            return;
+          }
           // 默认赋值
           if (obj?.chat_id && (selectedBusiness.value || isOnlyPage.value)) {
             chatId.value = obj?.chat_id;
@@ -492,6 +519,11 @@ async function sendMessage() {
     },
     // 链接关闭
     onclose() {
+      console.log(
+        '%c [ aiReturnMsg ]-516',
+        'font-size:13px; background:pink; color:#bf2c9f;',
+        aiReturnMsg,
+      );
       console.log('连接已关闭');
       if (streamSettled.value) return;
       if (isUserStopped.value) {
@@ -745,7 +777,7 @@ onUnmounted(() => {
   }
   .return-message-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 5px;
   }
   .return-message-body {
@@ -812,6 +844,98 @@ onUnmounted(() => {
       font-size: 12px;
       color: #999;
       margin-top: 5px;
+    }
+    .citations {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed #e5e7eb;
+    }
+    .citations-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #6b7280;
+      line-height: 1;
+    }
+    .citations-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #2563f4;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .citation-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      margin-bottom: 6px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid #eef2f7;
+      border-radius: 8px;
+      transition:
+        border-color 0.15s,
+        background-color 0.15s;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      &:hover {
+        background: #f8fafc;
+        border-color: #dbeafe;
+      }
+    }
+    .citation-index {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #eff6ff;
+      color: #2563f4;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 18px;
+      text-align: center;
+    }
+    .citation-source {
+      flex-shrink: 0;
+      max-width: 28%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 500;
+      color: #374151;
+    }
+    .citation-text {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+      line-height: 18px;
+      color: #9ca3af;
+    }
+    .citation-score {
+      flex-shrink: 0;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #f3f4f6;
+      color: #6b7280;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      line-height: 16px;
     }
     :deep(.v-note-wrapper) {
       z-index: 10;

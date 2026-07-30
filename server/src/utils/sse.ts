@@ -1,4 +1,9 @@
+/**
+ * SSE 工具函数
+ */
+
 import type { Response } from 'express';
+import type { RetrieveHit } from '../types/chunk.js';
 
 /** 写入一条 SSE 错误事件并结束响应 */
 export function writeSseError(res: Response, error: string) {
@@ -43,4 +48,9 @@ export function getStreamChunkError(chunk: unknown): string | null {
 export function getStreamDelta(chunk: unknown): string | null {
   if (!chunk || typeof chunk !== 'object') return null;
   return (chunk as StreamChunk).choices?.[0]?.delta?.content || null;
+}
+
+/** 写入 SSE 引用标记 */
+export function writeSseCitations(res: Response, citations: Array<RetrieveHit>) {
+  res.write(`data: ${JSON.stringify({ citations })}\n\n`);
 }

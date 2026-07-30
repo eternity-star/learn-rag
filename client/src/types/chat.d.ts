@@ -11,10 +11,11 @@ export type ChatMessage = {
 };
 
 /** System Prompt 选项 key；null 表示不使用 */
-export type SystemPromptKey =
-  | 'concise'
-  | 'detailed'
-  | 'translate'
-  | 'structured'
-  | null;
+export type SystemPromptKey = 'concise' | 'detailed' | 'translate' | 'structured' | null;
 
+export type RagCitation = {
+  id: string;
+  source: string;
+  text: string;
+  score: number;
+};

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { type ChatMessage } from '../services/deepseek.js';
-import { chatCompletion, chatCompletionStream } from '../services/deepseek.js';
+import { chatCompletionStream } from '../services/deepseek.js';
 import { createHttpError, getErrorMessage, getErrorStatus } from '../utils/errors.js';
 import {
   getStreamChunkError,
@@ -9,6 +9,7 @@ import {
   writeSseContent,
   writeSseDone,
   writeSseError,
+  writeSseCitations,
 } from '../utils/sse.js';
 import { retrieve } from '../services/indexer.js';
 
@@ -39,6 +40,17 @@ ${hits.map((h, i) => `[${i + 1}] (${h.source}) ${h.text}`).join('\n\n')}`,
     const first = await iterator.next();
 
     initSseHeaders(res);
+
+    // 先发引用，再发正文增量
+    writeSseCitations(
+      res,
+      hits.map((h) => ({
+        id: h.id,
+        source: h.source,
+        text: h.text,
+        score: h.score,
+      })),
+    );
 
     let hasContent = false;
 
