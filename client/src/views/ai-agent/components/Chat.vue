@@ -11,18 +11,11 @@
             'return-message': msg.role === 'assistant',
           }"
         >
-          <div
-            v-if="msg.role === 'user'"
-            class="message-content user-message-content"
-          >
+          <div v-if="msg.role === 'user'" class="message-content user-message-content">
             <div class="user-message-row">
               <div class="user-message-text" v-html="msg.content"></div>
               <div class="author-photo">
-                <img
-                  v-if="userInfoMap && userInfoMap.headUrl"
-                  :src="userInfoMap.headUrl"
-                  alt=""
-                />
+                <img v-if="userInfoMap && userInfoMap.headUrl" :src="userInfoMap.headUrl" alt="" />
                 <n-avatar v-else size="large">
                   <n-icon :component="UserOutlined" />
                 </n-avatar>
@@ -37,10 +30,7 @@
                 <n-icon :component="UserOutlined" />
               </n-avatar>
             </div>
-            <div
-              v-if="msg.isMsgLoading"
-              class="return-message-body return-message-loading"
-            >
+            <div v-if="msg.isMsgLoading" class="return-message-body return-message-loading">
               <span class="mr5">回答中</span>
               <div class="loading-dots">
                 <span class="dot"></span>
@@ -87,20 +77,14 @@
             :bordered="false"
             :autosize="{ minRows: 1, maxRows: 8 }"
             :placeholder="
-              pendingRetry
-                ? '发送失败，点击发送可重试上一句'
-                : '请向我提问或输入/查看提示词'
+              pendingRetry ? '发送失败，点击发送可重试上一句' : '请向我提问或输入/查看提示词'
             "
             @blur="handleInputBlur"
             @focus="handleInputFocus"
             @input="handlePromptInput"
             @keydown.enter.exact.prevent="sendMessage"
           />
-          <div
-            v-if="showPrompts"
-            class="prompt-list"
-            @mousedown="e => e.preventDefault()"
-          >
+          <div v-if="showPrompts" class="prompt-list" @mousedown="(e) => e.preventDefault()">
             <div
               v-for="(prompt, index) in filteredPrompts"
               :key="index"
@@ -109,10 +93,7 @@
             >
               {{ prompt.label }}
             </div>
-            <n-empty
-              v-if="!filteredPrompts.length"
-              style="margin: 10px 0"
-            ></n-empty>
+            <n-empty v-if="!filteredPrompts.length" style="margin: 10px 0"></n-empty>
           </div>
         </div>
         <div class="input-toolbar">
@@ -139,10 +120,7 @@
               :disabled="!isAllowInput"
               @click.stop="toggleRecording"
             >
-              <n-icon
-                :component="isRecording ? AudioFilled : AudioOutlined"
-                :size="22"
-              />
+              <n-icon :component="isRecording ? AudioFilled : AudioOutlined" :size="22" />
             </button>
             <button
               v-if="isSending"
@@ -176,10 +154,7 @@ import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { isJSON } from '@/utils/obj';
 import { WangEditor } from '@/components';
 import type { ChatMessage, SystemPromptKey } from '@/types/chat';
-import {
-  SYSTEM_PROMPT_CONTENT,
-  SYSTEM_PROMPT_OPTIONS,
-} from '@/constants/system-prompt';
+import { SYSTEM_PROMPT_CONTENT, SYSTEM_PROMPT_OPTIONS } from '@/constants/system-prompt';
 
 import AudioOutlined from '~icons/ant-design/audio-outlined';
 import AudioFilled from '~icons/ant-design/audio-filled';
@@ -287,8 +262,7 @@ const isAllowInput = computed(() => {
 // 是否允许发送
 const isAllowSend = computed(() => {
   return (
-    isAllowInput.value &&
-    (!!newMessage.value?.trim?.() || (isOnlyPage.value && isFirstSend.value))
+    isAllowInput.value && (!!newMessage.value?.trim?.() || (isOnlyPage.value && isFirstSend.value))
   );
 });
 // 是否返回文本类的消息
@@ -308,7 +282,7 @@ function handlerMessageParams() {
   const params = {};
   if (isOnlyPage.value) {
     Object.assign(params, {
-      messages: messages.value.map(msg => ({
+      messages: messages.value.map((msg) => ({
         role: msg.role,
         content: msg.content,
       })),
@@ -422,10 +396,7 @@ async function sendMessage() {
   const inputText = newMessage.value?.trim?.() || '';
   const lastUserContent = getLastUserContent();
   // 失败后点发送：同一句则重试，不重复插用户气泡
-  const isRetry =
-    pendingRetry.value &&
-    !!inputText &&
-    inputText === String(lastUserContent).trim();
+  const isRetry = pendingRetry.value && !!inputText && inputText === String(lastUserContent).trim();
 
   if (isRetry) {
     removeTrailingErrorAssistant();
@@ -453,9 +424,7 @@ async function sendMessage() {
 
   const aiReturnMsg = reactive({
     content: '',
-    isStream: isOnlyPage.value
-      ? isStream.value || 1
-      : (selectedBusiness.value?.isStream ?? 1),
+    isStream: isOnlyPage.value ? isStream.value || 1 : (selectedBusiness.value?.isStream ?? 1),
     role: 'assistant',
     time: '',
     isMsgLoading: false, // 消息是否显示加载中 当是流式返回json时需要等待全部数据返回后在停止渲染；当流式返回文本时不需要等待全部数据返回后在停止渲染
@@ -539,9 +508,7 @@ async function sendMessage() {
     onerror(err) {
       console.log('错误', err);
       const aborted =
-        isUserStopped.value ||
-        err?.name === 'AbortError' ||
-        !!controller.value?.signal?.aborted;
+        isUserStopped.value || err?.name === 'AbortError' || !!controller.value?.signal?.aborted;
 
       if (aborted) {
         finalizeStreamMsg(aiReturnMsg, { aborted: true });
@@ -593,17 +560,17 @@ function initWebSocket() {
   socket.value.onopen = () => {
     console.log('[ "连接成功，点击开始说话" ] >', '连接成功，点击开始说话');
   };
-  socket.value.onmessage = event => {
+  socket.value.onmessage = (event) => {
     const response = JSON.parse(event.data);
     if (response.code === 0) {
       transcript.value = response.data.text;
       newMessage.value = oldMessage.value + transcript.value;
     }
   };
-  socket.value.onerror = error => {
+  socket.value.onerror = (error) => {
     console.error('WebSocket error:', '连接异常，请刷新重试', error);
   };
-  socket.value.onclose = error => {
+  socket.value.onclose = (error) => {
     console.error('WebSocket error:', '连接关闭', error);
   };
 }
@@ -625,9 +592,7 @@ async function startRecording() {
       audio: true,
     });
     if (!socket.value) initWebSocket();
-    audioContext.value = new (
-      window.AudioContext || window.webkitAudioContext
-    )();
+    audioContext.value = new (window.AudioContext || window.webkitAudioContext)();
     recorder.value = new Recorder(audioContext.value, {
       sampleRate: 16000,
       bitRate: 16,
@@ -640,8 +605,8 @@ async function startRecording() {
     // 每500ms发送一次音频数据
     interval.value = setInterval(() => {
       if (audioRecorder) {
-        audioRecorder.getBuffer(buffer => {
-          audioRecorder.exportWAV(blob => {
+        audioRecorder.getBuffer((buffer) => {
+          audioRecorder.exportWAV((blob) => {
             socket.value.send(blob);
           });
         });
@@ -662,8 +627,7 @@ async function stopRecording() {
 }
 function handleError(err) {
   console.error('录音错误:', err);
-  status.value =
-    err.name === 'NotAllowedError' ? '请允许麦克风权限' : '设备不支持录音';
+  status.value = err.name === 'NotAllowedError' ? '请允许麦克风权限' : '设备不支持录音';
   message.error(status.value);
   isRecording.value = false;
 }
@@ -700,9 +664,7 @@ function handlePromptInput(e) {
 }
 function filterPrompts(keyword) {
   return keyword?.trim?.()
-    ? promptList.value.filter(p =>
-        p.label.toLowerCase().includes(keyword.toLowerCase()),
-      )
+    ? promptList.value.filter((p) => p.label.toLowerCase().includes(keyword.toLowerCase()))
     : promptList.value;
 }
 function selectPrompt(prompt) {
@@ -727,9 +689,7 @@ function formatLinks(content) {
     // 图片处理逻辑
     if (match.startsWith('!')) {
       // 处理图片路径
-      const imgUrl = url.startsWith('http')
-        ? url
-        : `https://emr-tl.cnhis.com${url}`;
+      const imgUrl = url.startsWith('http') ? url : `https://emr-tl.cnhis.com${url}`;
       return `<img src="${imgUrl}" style="max-width: 100%; margin: 5px 0; border-radius: 4px;" alt="图片"/>`;
     }
     // 链接处理逻辑
