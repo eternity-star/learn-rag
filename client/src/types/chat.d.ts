@@ -8,6 +8,7 @@ export type ChatMessage = {
   time?: string; // 消息时间
   isMsgLoading?: boolean; // 消息是否显示加载中 当是流式返回json时需要等待全部数据返回后在停止渲染；当流式返回文本时不需要等待全部数据返回后在停止渲染
   isError?: boolean; // 消息是否错误
+  citations?: RagCitation[]; // 引用资料
 };
 
 /** System Prompt 选项 key；null 表示不使用 */
