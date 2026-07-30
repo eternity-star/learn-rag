@@ -1,3 +1,17 @@
+/**
+ * 索引器
+ * 将文档分块并嵌入向量，存储到 chunks.json 文件中
+ * 从 chunks.json 文件中加载索引数据
+ * 计算查询语句与索引数据的相似度
+ * 返回相似度最高的文档片段
+ *
+ * 使用方法：
+ * const indexer = new Indexer();
+ * indexer.build();
+ * const hits = indexer.retrieve('查询语句');
+ * console.log(hits);
+ */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { chunkText } from './chunk.ts';
