@@ -484,7 +484,6 @@ async function sendMessage() {
         let obj = JSON.parse(str);
         if (obj) {
           obj = isJSON(obj) ? JSON.parse(obj) : obj;
-          console.log('%c [ obj ]-477', 'font-size:13px; background:pink; color:#bf2c9f;', obj);
 
           // 处理引用
           if (obj?.citations && Array.isArray(obj.citations)) {
