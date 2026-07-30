@@ -14,6 +14,7 @@ import {
 import { retrieve } from '../services/indexer.js';
 
 const router = Router();
+const MIN_SCORE = 0.35; // 可按实测再调
 
 router.post('/api/rag/stream', async (req, res) => {
   try {
@@ -31,8 +32,13 @@ router.post('/api/rag/stream', async (req, res) => {
       return;
     }
     const hits = await retrieve(question, 3);
-    const hitsText = hits.map((h, i) => `[${i + 1}] (${h.source}) ${h.text}`).join('\n\n');
-    const ragSystemPrompt = `你是知识库助手。只根据「参考资料」回答；资料不足就说不知道，不要编造。
+    const topScore = hits[0]?.score ?? 0;
+    const relevantHits = hits.length > 0 && topScore >= MIN_SCORE ? hits : [];
+    const hitsText = relevantHits.map((h, i) => `[${i + 1}] (${h.source}) ${h.text}`).join('\n\n');
+    const ragSystemPrompt =
+      relevantHits.length === 0
+        ? `你是知识库助手。当前没有足够相关的参考资料，请直接回答「根据现有知识库，我不知道」或说明资料不足，不要编造。`
+        : `你是知识库助手。只根据「参考资料」回答；资料不足就说不知道，不要编造。
 参考资料：
 ${hitsText}`;
 
@@ -60,7 +66,7 @@ ${hitsText}`;
     // 先发引用，再发正文增量
     writeSseCitations(
       res,
-      hits.map((h) => ({
+      relevantHits.map((h) => ({
         id: h.id,
         source: h.source,
         text: h.text,
