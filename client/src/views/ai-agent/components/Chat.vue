@@ -435,7 +435,7 @@ async function sendMessage() {
   if (isTextMsg.value) {
     messages.value.push(aiReturnMsg);
   }
-  const url = '/api/chat/stream';
+  const url = '/api/rag/stream';
   isSending.value = true;
   aiReturnMsg.isMsgLoading = true;
   // 发送消息

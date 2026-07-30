@@ -10,13 +10,11 @@ import {
   writeSseDone,
   writeSseError,
 } from '../utils/sse.js';
+import { retrieve } from '../services/indexer.js';
 
 const router = Router();
 
-/**
- * 非流式聊天
- */
-router.post('/api/chat/index', async (req, res) => {
+router.post('/api/rag/stream', async (req, res) => {
   try {
     const messages = req.body?.messages as ChatMessage[] | undefined;
 
@@ -25,29 +23,14 @@ router.post('/api/chat/index', async (req, res) => {
       return;
     }
 
-    const content = await chatCompletion(messages);
-    res.json({ content });
-  } catch (err) {
-    console.error(err);
-    res.status(getErrorStatus(err)).json({ error: getErrorMessage(err) });
-  }
-});
-
-/**
- * SSE流式聊天
- *
- * 注意：OpenAI SDK 在 stream:true 时，`create()` 成功只代表「流对象创建成功」，
- * 鉴权/模型错误经常在第一次读取 chunk（iterator.next）时才抛出。
- * 因此必须先拉取第一块，再 flush SSE 响应头，否则前端永远看到 HTTP 200。
- */
-router.post('/api/chat/stream', async (req, res) => {
-  try {
-    const messages = req.body?.messages as ChatMessage[] | undefined;
-
-    if (!Array.isArray(messages) || messages.length === 0) {
-      res.status(400).json({ error: 'messages 不能为空' });
-      return;
-    }
+    const question = messages[messages.length - 1].content;
+    const hits = await retrieve(question, 3);
+    messages.unshift({
+      role: 'system',
+      content: `你是知识库助手。只根据「参考资料」回答；资料不足就说不知道，不要编造。
+参考资料：
+${hits.map((h, i) => `[${i + 1}] (${h.source}) ${h.text}`).join('\n\n')}`,
+    });
 
     const stream = await chatCompletionStream(messages);
     const iterator = stream[Symbol.asyncIterator]();
