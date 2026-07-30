@@ -3,7 +3,7 @@ import { retrieve } from '../src/services/indexer';
 import { chatCompletion } from '../src/services/deepseek.js';
 
 console.time('计算embedded时间');
-const hits = await retrieve('pacs系统有哪些业务模块');
+const hits = await retrieve('pacs系统有哪些业务模块', 3);
 hits.forEach((hit) => {
   console.log('[ hit ] >', hit.score, hit.source, hit.text?.slice(0, 30));
 });

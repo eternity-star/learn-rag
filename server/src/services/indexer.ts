@@ -58,6 +58,29 @@ export class Indexer {
   }
 }
 
+/** 从问题里抽关键词，用来匹配 source 文件名 */
+function extractQueryTokens(query: string): string[] {
+  const q = query.toLowerCase();
+  // 连续英文/数字（pacs、iho、lis…）
+  const latin = q.match(/[a-z][a-z0-9-]{1,}/g) ?? [];
+  // 再加一点中文专有词（按你的库扩展）
+  const extras: string[] = [];
+  if (q.includes('影像')) extras.push('pacs');
+  return [...new Set([...latin, ...extras])];
+}
+
+function calcSourceBoost(source: string, tokens: string[]): number {
+  const s = source.toLowerCase();
+  // 命中任意 keywords 就加分；多个命中可累加，设上限避免爆表
+  let boost = 0;
+  tokens.forEach((t) => {
+    // 命中则加权重 暂定0.08
+    if (t.length > 0 && s.includes(t)) boost += 0.08;
+  });
+  // 上限最高0.2
+  return Math.min(boost, 0.2);
+}
+
 // 用于计算向量相似度
 function dot(a: number[], b: number[]) {
   let s = 0;
@@ -79,12 +102,18 @@ export async function retrieve(query: string, topK: number = 5): Promise<Retriev
   const chunks = indexer.getChunks();
   if (chunks.length === 0) return [];
   const questionEmbedding = await embedText(query);
-  const scored = chunks.map((chunk) => ({
-    id: chunk.id,
-    source: chunk.source,
-    text: chunk.text,
-    score: dot(questionEmbedding, chunk.embedding),
-  }));
+  const tokens = extractQueryTokens(query);
+  const scored = chunks.map((chunk) => {
+    const semantic = dot(questionEmbedding, chunk.embedding);
+    const sourceBoost = calcSourceBoost(chunk.source, tokens);
+    const score = semantic + sourceBoost;
+    return {
+      id: chunk.id,
+      source: chunk.source,
+      text: chunk.text,
+      score,
+    };
+  });
 
   // 分数从高到低排，取前 topK
   scored.sort((a, b) => b.score - a.score);
