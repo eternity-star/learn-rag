@@ -6,12 +6,20 @@ export function getErrorMessage(err: unknown, fallback = '调用模型失败') {
   const e = err as {
     status?: number;
     code?: string;
+    type?: string;
     message?: string;
-    error?: { message?: string };
+    error?: { message?: string; code?: string; type?: string };
   };
   const detail = e.error?.message || e.message;
+  const detailLower = (detail || '').toLowerCase();
   if (e.status === 401 || e.code === 'invalid_api_key') {
     return detail || 'API Key 无效或未授权';
+  }
+  if (
+    e.status === 402 ||
+    /insufficient[_\s-]?balance|payment required|余额不足|额度不足|欠费/i.test(detailLower)
+  ) {
+    return '模型服务余额不足，请到 API 提供方充值后再试';
   }
   if (e.status === 429) {
     return detail || '请求过于频繁，请稍后重试';

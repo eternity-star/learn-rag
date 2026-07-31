@@ -364,6 +364,9 @@ function resolveStreamErrorTip(err: unknown) {
   if (/401|unauthorized|api.?key/i.test(raw)) {
     return '模型鉴权失败，请检查 API Key 配置';
   }
+  if (/402|insufficient[_\s-]?balance|payment required|余额不足|额度不足/i.test(raw)) {
+    return '模型服务余额不足，请到 API 提供方充值后再试';
+  }
   if (/429|rate limit/i.test(raw)) {
     return '请求过于频繁，请稍后重试';
   }
@@ -472,6 +475,18 @@ async function sendMessage() {
     body: JSON.stringify({
       ...params,
     }),
+    async onopen(response) {
+      if (response.ok) return;
+      // 流未建立前的 JSON 错误（如 401/402），把服务端文案抛给 onerror
+      let tip = `HTTP ${response.status}`;
+      try {
+        const data = (await response.json()) as { error?: string };
+        if (data?.error) tip = data.error;
+      } catch {
+        // ignore parse failure
+      }
+      throw new Error(tip);
+    },
     // 接收流式数据
     onmessage(res) {
       if (streamSettled.value) return;
