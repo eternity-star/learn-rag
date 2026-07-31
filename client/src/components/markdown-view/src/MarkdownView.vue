@@ -108,25 +108,34 @@ const html = computed(() =>
 
   :deep(table) {
     display: block;
-    width: 100%;
+    width: max-content;
     max-width: 100%;
     margin: 0.8em 0;
     border-collapse: collapse;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
     font-size: 13px;
     overflow-x: auto;
   }
 
   :deep(th),
   :deep(td) {
-    border: 1px solid #e5e7eb;
-    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    padding: 8px 12px;
     vertical-align: top;
+    background: #fff;
   }
 
   :deep(th) {
-    background: #f9fafb;
+    background: #f3f4f6;
     font-weight: 600;
     white-space: nowrap;
+    color: #374151;
+  }
+
+  :deep(tr:nth-child(even) td) {
+    background: #f9fafb;
   }
 
   :deep(hr) {
