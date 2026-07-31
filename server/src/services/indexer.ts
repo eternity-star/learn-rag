@@ -17,9 +17,10 @@ import path from 'node:path';
 import { chunkText } from './chunk.ts';
 import { embedText } from './embedding.ts';
 import type { IndexedChunk, RetrieveHit } from '../types/chunk.js';
+import { getDocsDir } from './docs.ts';
 
 export class Indexer {
-  private docsDir: string = path.resolve(import.meta.dirname, '../../data/docs');
+  private docsDir: string = getDocsDir();
   private indexFilePath: string = path.resolve(import.meta.dirname, '../../data/chunks.json');
   private chunks: IndexedChunk[] = [];
 

@@ -12,6 +12,7 @@ import {
   writeSseCitations,
 } from '../utils/sse.js';
 import { retrieve } from '../services/indexer.js';
+import { Indexer } from '../services/indexer.js';
 
 const router = Router();
 const MIN_SCORE = 0.35; // 可按实测再调
@@ -115,6 +116,25 @@ ${hitsText}`;
     }
 
     writeSseError(res, error);
+  }
+});
+
+/**
+ * 重建索引
+ */
+router.post('/api/rag/reindex', async (_req, res) => {
+  try {
+    const indexer = new Indexer();
+    await indexer.build();
+    indexer.save();
+    res.json({
+      ok: true,
+      chunks: indexer.getChunks().length,
+    });
+  } catch (err) {
+    console.error(err);
+    const error = getErrorMessage(err);
+    res.status(getErrorStatus(err)).json({ error });
   }
 });
 
