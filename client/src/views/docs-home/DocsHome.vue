@@ -135,20 +135,13 @@
           @click="previewFullscreen = !previewFullscreen"
         >
           <template #icon>
-            <n-icon
-              :component="previewFullscreen ? CompressOutlined : ExpandOutlined"
-              :size="18"
-            />
+            <n-icon :component="previewFullscreen ? CompressOutlined : ExpandOutlined" :size="18" />
           </template>
         </n-button>
       </template>
       <n-spin :show="previewLoading" class="preview-spin">
         <n-scrollbar :style="previewScrollStyle">
-          <MarkdownView
-            :content="previewContent"
-            allow-html
-            class="md-preview-wrap"
-          />
+          <MarkdownView :content="previewContent" allow-html class="md-preview-wrap" />
         </n-scrollbar>
       </n-spin>
     </n-modal>
@@ -226,15 +219,13 @@ const previewModalStyle = computed(() =>
         borderRadius: '0',
       }
     : {
-        width: '860px',
+        width: '960px',
         maxWidth: '94vw',
       },
 );
 
 const previewScrollStyle = computed(() =>
-  previewFullscreen.value
-    ? { height: 'calc(100vh - 72px)' }
-    : { maxHeight: '70vh' },
+  previewFullscreen.value ? { height: 'calc(100vh - 72px)' } : { maxHeight: '70vh' },
 );
 
 function onPreviewLeave() {
