@@ -1,0 +1,35 @@
+---
+description: 前端非流式 API 统一走 http 封装
+globs: client/src/services/api/**/*
+alwaysApply: false
+---
+
+# 前端 API 调用约定
+
+## 非流式接口
+
+在 `client/src/services/api/*` 中封装后端接口时：
+
+1. 统一使用：
+
+```ts
+import { http } from '../http';
+
+export const xxx = (...) => {
+  return http.request({
+    url: '/...', // baseURL 已是 /api，这里不要再写 /api 前缀
+    method: 'GET' | 'POST' | 'DELETE' | ...,
+    data: { ... }, // 如有
+  });
+};
+```
+
+2. **不要**在 `services/api` 里直接用 `fetch` / 裸 `axios.create`，除非本文件或任务中**明确要求**例外。
+3. `http` 的 `baseURL` 为 `/api`，路径写成 `/rag/docs`、`/chat/index` 这种相对 `/api` 的形式。
+4. 返回类型与 `chat-api.ts` 对齐：一般为 `Promise<HttpResponse<T>>`（见 `services/http/types.ts`）。
+5. 超长耗时接口（如重建索引）可在单次 `http.request` 里覆盖 `timeout`。
+6. 页面侧取数用 `const { data } = await xxx()`；错误文案用 `getApiError`（从 `@/services/http` 导入），不要在视图里直接依赖 axios 包。
+
+## 流式接口例外
+
+SSE / 流式对话继续用 `@microsoft/fetch-event-source`（如 `Chat.vue`），**不走** `http.request`。

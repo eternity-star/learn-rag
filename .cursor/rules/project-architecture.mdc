@@ -9,15 +9,17 @@ alwaysApply: true
 
 ## 关键事实
 
-- 可运行代码目前只在 **`client/`**（Vue3 + Vite + TS + Naive UI + UnoCSS）。
-- `server/` 尚未创建；AI 聊天接口前缀为 **`/process/ai/*`**，流式用 **`fetchEventSource`**。
+- 单仓双端：`client/`（Vue3 + Vite + TS + Naive UI + UnoCSS）、`server/`（Express + TS）。
+- 前端开发端口 `1688`；Vite 代理 `/api` → `http://localhost:3000`。
+- 主聊天/RAG 走 **`/api/rag/stream`**（SSE，`fetchEventSource`）；知识库管理页在 `client/src/views/docs-home/`。
 - UnoCSS 工具类前缀 **`lrx-`**（如 `lrx-p-0`），配置在 `client/uno.config.ts`。
 - 核心业务：`client/src/views/ai-agent/`（`AiChat` → `ChatRecord` + `Chat`）。
-- `docs/` 被根 `.gitignore` 忽略，不要假设其中文档已入库。
+- `docs/`、`server/data/chunks.json`、`.env` 被 gitignore，不要假设已入库。
 
 ## 改代码时
 
 - 使用 `<script setup lang="ts">`，样式 `lang="less" scoped`。
 - UI 用 Naive UI；图标用 `~icons/ant-design/*`。
-- 保持现有目录与 barrel 导出（`@/components`）。
+- 保持现有目录与 barrel 导出（`@/components`、`@/services`）。
+- **非流式 API**：在 `client/src/services/api/*` 中统一 `import { http } from '../http'`，用 `http.request(...)`；不要默认用 `fetch`（流式 SSE 除外）。详见规则 `client-api-http.mdc`。
 - 详细模块职责、接口表、缺口清单以 `AGENTS.md` 为准。

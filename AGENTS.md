@@ -33,9 +33,10 @@ learn-rag/
 │   └── src/
 │       ├── main.ts
 │       ├── App.vue
-│       ├── router/           # / → AiChat
+│       ├── router/           # / → AiChat；/docs → DocsHome
 │       ├── views/ai-agent/   # 聊天业务页
-│       ├── services/         # HTTP / API（含非流式 chat-api）
+│       ├── views/docs-home/  # 知识库管理（上传/删除/重建索引）
+│       ├── services/         # HTTP / API（chat-api、docs-api）
 │       ├── constants/        # System Prompt 选项
 │       ├── components/
 │       ├── styles/
@@ -53,11 +54,13 @@ learn-rag/
         ├── index.ts          # 注册 chat + rag 路由，/health
         ├── routes/
         │   ├── chat.ts       # /api/chat/index、/api/chat/stream
-        │   └── rag.ts        # /api/rag/stream（主路径）
+        │   ├── rag.ts        # /api/rag/stream、/api/rag/reindex
+        │   └── docs.ts       # /api/rag/docs 列表/上传/删除
         ├── services/
         │   ├── deepseek.ts   # OpenAI SDK → DeepSeek
         │   ├── chunk.ts      # 固定字数切分 + overlap
         │   ├── embedding.ts  # 本地 Transformers.js
+        │   ├── docs.ts       # 知识库源文件读写（与 Indexer 解耦）
         │   └── indexer.ts    # build / save / load / retrieve
         ├── types/chunk.ts
         └── utils/            # errors、sse（含 writeSseCitations）
@@ -191,11 +194,12 @@ AiChat.vue
 1. Vue：Composition API + `<script setup lang="ts">`；顺序 template → script → style。
 2. UI：优先 Naive UI；消息/对话框用已注入的 `useMessage` / `useDialog`。
 3. 图标：`import Xxx from '~icons/ant-design/xxx'`，再交给 `n-icon`。
-4. 流式：POST 用 `fetchEventSource`，不要用原生 `EventSource`。
-5. 新聊天/RAG 能力走 `/api/*`（经 Vite 代理）；不要再把主路径接回 `/process/ai/*`。
-6. RAG 改动优先动 `server/src/services/*` 与 `routes/rag.ts`；保持路由薄、逻辑在 services。
-7. 少加无关文档；`docs/` 默认不提交；`chunks.json` 不提交（本地 build）。
-8. 用户侧沟通用简体中文。
+4. **非流式 API**：在 `client/src/services/api/*` 统一 `import { http } from '../http'`，用 `http.request`；`baseURL` 已是 `/api`，url 写 `/rag/docs` 这类路径。未特别说明时不要在 api 层直接 `fetch`。
+5. **流式**：POST SSE 用 `fetchEventSource`，不要用原生 `EventSource`，也不走 `http.request`。
+6. 新聊天/RAG 能力走 `/api/*`（经 Vite 代理）；不要再把主路径接回 `/process/ai/*`。
+7. RAG 改动优先动 `server/src/services/*` 与 `routes/rag.ts` / `docs.ts`；保持路由薄、逻辑在 services。
+8. 少加无关文档；`docs/` 默认不提交；`chunks.json` 不提交（本地 build）。
+9. 用户侧沟通用简体中文。
 
 ---
 
@@ -206,7 +210,7 @@ AiChat.vue
 - [x] 手写 RAG：chunk / embed / JSON 索引 / retrieve
 - [x] `/api/rag/stream` + 前端 citations 展示
 - [ ] 简易评测表（20 问）与失败案例记录
-- [ ] 文档上传 / 重建索引 / 删除的 HTTP API
+- [x] 文档上传 / 重建索引 / 删除的 HTTP API + `docs-home` 管理页
 - [ ] 中期向量库（pgvector 等）
 - [ ] 切分优化（标题层级）、Hybrid / Rerank（了解即可）
 - [ ] `AiChat` 左右栏会话与新后端打通

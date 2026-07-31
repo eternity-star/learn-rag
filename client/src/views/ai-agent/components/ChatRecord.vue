@@ -14,6 +14,14 @@
       >
         新建对话
       </n-button>
+      <n-button
+        class="lrx-w-full lrx-mt-2"
+        quaternary
+        type="primary"
+        @click="goDocsHome"
+      >
+        知识库管理
+      </n-button>
       <div style="text-align: left; padding-top: 20px; color: black">
         历史记录
       </div>
@@ -43,6 +51,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { useRouter } from 'vue-router';
 import DeleteOutlined from '~icons/ant-design/delete-outlined';
 
 const emit = defineEmits<{
@@ -50,8 +59,13 @@ const emit = defineEmits<{
   (e: 'changeChatInfo', chatInfo: any): void;
 }>();
 
+const router = useRouter();
 const message = useMessage();
 const dialog = useDialog();
+
+function goDocsHome() {
+  router.push({ name: 'docs-home' });
+}
 
 const selectedChat = ref<any>(null);
 const recordList = ref<any[]>([]);

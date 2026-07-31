@@ -197,7 +197,7 @@ const props = withDefaults(
 
 const { selectedBusiness, isPage } = toRefs(props);
 
-const parseFormat = ref(route.query.parseFormat || 'html'); // 解析格式 html markdown
+const parseFormat = ref(route.query.parseFormat || 'markdown'); // 解析格式 html markdown
 const keyField = ref(route.query.keyField || 'id'); // 获取外面列表哪个字段
 const paramField = ref(route.query.paramField || ''); // 接口传参哪个字段
 const isSendType = ref(route.query.isSendType || ''); // 发送方式 1-进页面后直接发送消息

@@ -1,6 +1,6 @@
 import { http } from '../http';
 import type { ChatMessage } from '@/types/chat';
-import type { AxiosResponse } from 'axios';
+import type { HttpResponse } from '../http/types';
 
 /**
  * 非流式聊天
@@ -9,7 +9,7 @@ import type { AxiosResponse } from 'axios';
  */
 export const chatIndex = (
   messages: ChatMessage[],
-): Promise<AxiosResponse<ChatMessage>> => {
+): Promise<HttpResponse<ChatMessage>> => {
   return http.request({
     url: '/chat/index',
     method: 'POST',

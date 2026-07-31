@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listDocs, saveDoc, deleteDoc } from '../services/docs.js';
+import { listDocs, saveDoc, deleteDoc, readDoc } from '../services/docs.js';
 import { getErrorMessage, getErrorStatus } from '../utils/errors.js';
 
 const router = Router();
@@ -12,6 +12,17 @@ router.get('/api/rag/docs', (_req, res) => {
     res.json({ docs: listDocs() });
   } catch (err) {
     res.status(getErrorStatus(err)).json({ error: getErrorMessage(err, '列出文档失败') });
+  }
+});
+
+/**
+ * 读取单个文档内容
+ */
+router.get('/api/rag/docs/:name', (req, res) => {
+  try {
+    res.json(readDoc(req.params.name));
+  } catch (err) {
+    res.status(getErrorStatus(err)).json({ error: getErrorMessage(err, '读取文档失败') });
   }
 });
 

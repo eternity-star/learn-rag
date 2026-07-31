@@ -109,4 +109,14 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => ({
   },
 }));
 </script>
-<style scoped></style>
+<style>
+#app,
+.n-config-provider,
+.n-loading-bar-provider,
+.n-message-provider,
+.n-dialog-provider,
+.n-modal-provider,
+.n-notification-provider {
+  height: 100%;
+}
+</style>

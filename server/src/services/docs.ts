@@ -48,6 +48,21 @@ export function listDocs() {
 }
 
 /**
+ * 读取文档内容
+ * @param name 文档名
+ * @returns 文档名与正文
+ */
+export function readDoc(name: string) {
+  const safeName = safeDocName(name);
+  const full = path.join(docsDir, safeName);
+  if (!fs.existsSync(full)) throw createHttpError('文件不存在', 404);
+  return {
+    name: safeName,
+    content: fs.readFileSync(full, 'utf-8'),
+  };
+}
+
+/**
  * 保存文档
  * @param name 文档名
  * @param content 文档内容
