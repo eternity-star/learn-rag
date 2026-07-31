@@ -102,13 +102,20 @@
             @blur="handleInputBlur"
             @focus="handleInputFocus"
             @input="handlePromptInput"
-            @keydown.enter.exact.prevent="sendMessage"
+            @keydown="handleInputKeydown"
           />
-          <div v-if="showPrompts" class="prompt-list" @mousedown="(e) => e.preventDefault()">
+          <div
+            v-if="showPrompts"
+            ref="promptListRef"
+            class="prompt-list"
+            @mousedown="(e) => e.preventDefault()"
+          >
             <div
               v-for="(prompt, index) in filteredPrompts"
               :key="index"
               class="prompt-item"
+              :class="{ 'is-active': index === activePromptIndex }"
+              @mouseenter="activePromptIndex = index"
               @click="selectPrompt(prompt)"
             >
               {{ prompt.label }}
@@ -321,14 +328,19 @@ const streamSettled = ref(false);
 /** 上一轮失败，等待用发送按钮重试（不重复插用户气泡） */
 const pendingRetry = ref(false);
 
+type PromptItem = { label: string; value: string };
+
 const showPrompts = ref(false);
-const filteredPrompts = ref([]);
-const promptList = ref([
+const filteredPrompts = ref<PromptItem[]>([]);
+const promptList = ref<PromptItem[]>([
   { label: '电生理如何接入报告', value: '电生理如何接入报告' },
   { label: '采集卡如何设置', value: '采集卡如何设置' },
   { label: '分析调阅报路径找不到', value: '分析调阅报路径找不到' },
 ]);
-const selectedPrompt = ref(null);
+const selectedPrompt = ref<PromptItem | null>(null);
+/** 提示词列表当前高亮项（上下键切换） */
+const activePromptIndex = ref(0);
+const promptListRef = ref<HTMLElement | null>(null);
 
 const messageContainer = ref<typeof HTMLElement>();
 
@@ -750,9 +762,10 @@ function scrollToBottom() {
     }
   });
 }
-function handleInputBlur(e) {
+function handleInputBlur(e: FocusEvent) {
   // 判断焦点是否转移到提示词列表
-  if (!e.relatedTarget || !e.relatedTarget.closest('.prompt-list')) {
+  const related = e.relatedTarget as HTMLElement | null;
+  if (!related || !related.closest('.prompt-list')) {
     showPrompts.value = false;
   }
   showPrompts.value = false;
@@ -761,26 +774,73 @@ function handleInputFocus() {
   if (newMessage.value?.[0] == '/') {
     showPrompts.value = true;
     filteredPrompts.value = filterPrompts();
+    activePromptIndex.value = 0;
   }
 }
-function handlePromptInput(e) {
-  const value = e;
+function handlePromptInput(value: string) {
   if (value.includes('/')) {
     showPrompts.value = true;
     filteredPrompts.value = filterPrompts(value.split('/')[1]);
+    activePromptIndex.value = 0;
   } else {
     showPrompts.value = false;
   }
 }
-function filterPrompts(keyword) {
+function filterPrompts(keyword?: string) {
   return keyword?.trim?.()
     ? promptList.value.filter((p) => p.label.toLowerCase().includes(keyword.toLowerCase()))
     : promptList.value;
 }
-function selectPrompt(prompt) {
+function selectPrompt(prompt: PromptItem) {
   selectedPrompt.value = prompt;
   newMessage.value = prompt.value;
   showPrompts.value = false;
+  activePromptIndex.value = 0;
+}
+
+function scrollActivePromptIntoView() {
+  nextTick(() => {
+    const list = promptListRef.value;
+    const active = list?.querySelector<HTMLElement>('.prompt-item.is-active');
+    active?.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+/** 提示词面板打开时：↑↓ 切换、Enter 选中、Esc 关闭；否则 Enter 发送 */
+function handleInputKeydown(e: KeyboardEvent) {
+  const promptsOpen = showPrompts.value && filteredPrompts.value.length > 0;
+
+  if (promptsOpen) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activePromptIndex.value = (activePromptIndex.value + 1) % filteredPrompts.value.length;
+      scrollActivePromptIntoView();
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activePromptIndex.value =
+        (activePromptIndex.value - 1 + filteredPrompts.value.length) % filteredPrompts.value.length;
+      scrollActivePromptIntoView();
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const prompt = filteredPrompts.value[activePromptIndex.value];
+      if (prompt) selectPrompt(prompt);
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      showPrompts.value = false;
+      return;
+    }
+  }
+
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
 }
 /**
  * 链接解析方法
@@ -1282,8 +1342,12 @@ onUnmounted(() => {
   .prompt-item {
     padding: 8px 16px;
     cursor: pointer;
-    &:hover {
-      background: #f5f5f5;
+    transition: background-color 0.15s;
+
+    &:hover,
+    &.is-active {
+      background: #eff6ff;
+      color: #1d4ed8;
     }
   }
 }
