@@ -4,27 +4,15 @@
       <n-button
         type="default"
         class="lrx-w-full"
-        style="
-          width: 100%;
-          color: #3872fc;
-          background-color: #fff;
-          border-color: #3872fc;
-        "
+        style="width: 100%; color: #3872fc; background-color: #fff; border-color: #3872fc"
         @click="addChat"
       >
         新建对话
       </n-button>
-      <n-button
-        class="lrx-w-full lrx-mt-2"
-        quaternary
-        type="primary"
-        @click="goDocsHome"
-      >
+      <n-button class="lrx-w-full lrx-mt-2" quaternary type="primary" @click="goDocsHome">
         知识库管理
       </n-button>
-      <div style="text-align: left; padding-top: 20px; color: black">
-        历史记录
-      </div>
+      <div style="text-align: left; padding-top: 20px; color: black">历史记录</div>
     </div>
     <div class="record-list">
       <div
@@ -75,7 +63,7 @@ onMounted(() => {
 });
 
 function addChat() {
-  if (recordList.value.find(it => !it.chatId)) return;
+  if (recordList.value.find((it) => !it.chatId)) return;
   const item = {
     chatId: '',
     title: '新的对话',
@@ -133,9 +121,7 @@ async function getChatAllAiHistory() {
     if (success) {
       recordList.value = (resData || [])
         .slice()
-        .sort((a: any, b: any) =>
-          a.createdTime > b.createdTime ? -1 : 1,
-        );
+        .sort((a: any, b: any) => (a.createdTime > b.createdTime ? -1 : 1));
     } else {
       message.error(msg);
     }
@@ -194,7 +180,7 @@ async function queryChatInfo(otem: any) {
 }
 .record-list {
   padding: 0 2px;
-  height: calc(100% - 120px);
+  height: calc(100% - 140px);
   overflow-y: auto;
   .record-item {
     display: flex;

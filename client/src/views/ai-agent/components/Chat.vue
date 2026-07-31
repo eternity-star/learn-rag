@@ -48,10 +48,11 @@
               ></div>
               <div
                 v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
-                class="message-content return-content"
+                v-viewer
+                class="message-content return-content return-markdown"
                 :class="{ 'is-error': msg.isError }"
               >
-                <WangEditor v-model:value="msg.content" v-viewer />
+                <MarkdownView :content="msg.content" />
               </div>
               <div
                 v-else-if="msg.isStream == 0"
@@ -171,7 +172,7 @@
 import { useRoute } from 'vue-router';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { isJSON } from '@/utils/obj';
-import { WangEditor } from '@/components';
+import { MarkdownView } from '@/components';
 import type { ChatMessage, RagCitation, SystemPromptKey } from '@/types/chat';
 import { SYSTEM_PROMPT_CONTENT, SYSTEM_PROMPT_OPTIONS } from '@/constants/system-prompt';
 
@@ -839,6 +840,10 @@ onUnmounted(() => {
       word-wrap: break-word;
       img {
         max-width: 100% !important;
+      }
+
+      &.return-markdown {
+        white-space: normal;
       }
 
       &.is-error {

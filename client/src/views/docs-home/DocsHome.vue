@@ -101,13 +101,35 @@
       v-model:show="showPreview"
       preset="card"
       :title="previewName || '文档预览'"
-      style="width: 860px; max-width: 94vw"
+      :style="previewModalStyle"
+      :class="{ 'preview-modal--fullscreen': previewFullscreen }"
       :bordered="false"
       display-directive="if"
+      @after-leave="onPreviewLeave"
     >
-      <n-spin :show="previewLoading">
-        <n-scrollbar style="max-height: 70vh">
-          <pre class="md-preview">{{ previewContent }}</pre>
+      <template #header-extra>
+        <n-button
+          quaternary
+          circle
+          size="small"
+          :title="previewFullscreen ? '退出全屏' : '全屏查看'"
+          @click="previewFullscreen = !previewFullscreen"
+        >
+          <template #icon>
+            <n-icon
+              :component="previewFullscreen ? CompressOutlined : ExpandOutlined"
+              :size="18"
+            />
+          </template>
+        </n-button>
+      </template>
+      <n-spin :show="previewLoading" class="preview-spin">
+        <n-scrollbar :style="previewScrollStyle">
+          <MarkdownView
+            :content="previewContent"
+            allow-html
+            class="md-preview-wrap"
+          />
         </n-scrollbar>
       </n-spin>
     </n-modal>
@@ -125,6 +147,7 @@ import {
   reindexDocs,
 } from '@/services/api/docs-api';
 import { getApiError } from '@/services/http';
+import { MarkdownView } from '@/components';
 import { useRouter } from 'vue-router';
 
 import MessageOutlined from '~icons/ant-design/message-outlined';
@@ -133,6 +156,8 @@ import PlusOutlined from '~icons/ant-design/plus-outlined';
 import UploadOutlined from '~icons/ant-design/upload-outlined';
 import DatabaseOutlined from '~icons/ant-design/database-outlined';
 import DeleteOutlined from '~icons/ant-design/delete-outlined';
+import ExpandOutlined from '~icons/ant-design/expand-outlined';
+import CompressOutlined from '~icons/ant-design/compress-outlined';
 
 const router = useRouter();
 const message = useMessage();
@@ -152,6 +177,32 @@ const showPreview = ref(false);
 const previewLoading = ref(false);
 const previewName = ref('');
 const previewContent = ref('');
+const previewFullscreen = ref(false);
+
+const previewModalStyle = computed(() =>
+  previewFullscreen.value
+    ? {
+        width: '100vw',
+        maxWidth: '100vw',
+        height: '100vh',
+        margin: '0',
+        borderRadius: '0',
+      }
+    : {
+        width: '860px',
+        maxWidth: '94vw',
+      },
+);
+
+const previewScrollStyle = computed(() =>
+  previewFullscreen.value
+    ? { height: 'calc(100vh - 72px)' }
+    : { maxHeight: '70vh' },
+);
+
+function onPreviewLeave() {
+  previewFullscreen.value = false;
+}
 
 function formatSize(size: number) {
   if (size < 1024) return `${size} B`;
@@ -408,16 +459,34 @@ onMounted(() => {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.md-preview {
-  margin: 0;
-  padding: 12px 14px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.65;
-  color: #1f2329;
-  background: #f7f8fa;
-  border-radius: 8px;
+.md-preview-wrap {
+  padding: 4px 2px 12px;
+}
+
+:deep(.preview-modal--fullscreen) {
+  .n-card {
+    height: 100vh;
+    max-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    border-radius: 0;
+  }
+
+  .n-card__content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .preview-spin {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .n-spin-container,
+  .n-spin-content {
+    height: 100%;
+  }
 }
 </style>

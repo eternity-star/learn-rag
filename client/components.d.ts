@@ -12,6 +12,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    MarkdownView: typeof import('./src/components/markdown-view/src/MarkdownView.vue')['default']
     NAvatar: typeof import('naive-ui')['NAvatar']
     NButton: typeof import('naive-ui')['NButton']
     NConfigProvider: typeof import('naive-ui')['NConfigProvider']
@@ -40,6 +41,7 @@ declare module 'vue' {
 
 // For TSX support
 declare global {
+  const MarkdownView: typeof import('./src/components/markdown-view/src/MarkdownView.vue')['default']
   const NAvatar: typeof import('naive-ui')['NAvatar']
   const NButton: typeof import('naive-ui')['NButton']
   const NConfigProvider: typeof import('naive-ui')['NConfigProvider']
