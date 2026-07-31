@@ -1,9 +1,15 @@
 <template>
   <div class="docs-home lrx-h-full lrx-w-full lrx-flex lrx-flex-col lrx-box-border">
     <header class="docs-header">
-      <div class="lrx-flex lrx-items-center lrx-gap-3">
+      <div class="docs-title-wrap">
         <h1 class="docs-title">知识库管理</h1>
         <n-tag size="small" :bordered="false">MD / TXT</n-tag>
+        <n-tooltip placement="bottom-start">
+          <template #trigger>
+            <span class="docs-hint">{{ docsHintText }}</span>
+          </template>
+          {{ docsHintText }}
+        </n-tooltip>
       </div>
       <div class="lrx-flex lrx-items-center lrx-gap-2">
         <n-button quaternary @click="goChat">
@@ -45,15 +51,28 @@
       </div>
     </header>
 
-    <p class="docs-hint">
-      双击行可查看文档内容。上传或删除文档后，请点击「重建索引」才会更新向量库；重建可能需数分钟（本地
-      Embedding）。
-    </p>
+    <div class="docs-toolbar">
+      <n-input
+        v-model:value="nameInput"
+        clearable
+        placeholder="搜索文件名，回车检索"
+        class="docs-search"
+        @keyup.enter="applyNameSearch"
+        @clear="applyNameSearch"
+      >
+        <template #prefix>
+          <n-icon :component="SearchOutlined" />
+        </template>
+      </n-input>
+      <span class="docs-count">
+        {{ filteredDocs.length }}{{ nameQuery ? ` / ${docs.length}` : '' }} 个文件
+      </span>
+    </div>
 
     <div class="docs-table-wrap">
       <n-data-table
         :columns="columns"
-        :data="docs"
+        :data="filteredDocs"
         :loading="loading"
         :bordered="false"
         :single-line="false"
@@ -158,13 +177,31 @@ import DatabaseOutlined from '~icons/ant-design/database-outlined';
 import DeleteOutlined from '~icons/ant-design/delete-outlined';
 import ExpandOutlined from '~icons/ant-design/expand-outlined';
 import CompressOutlined from '~icons/ant-design/compress-outlined';
+import SearchOutlined from '~icons/ant-design/search-outlined';
 
 const router = useRouter();
 const message = useMessage();
 const dialog = useDialog();
 
+const docsHintText =
+  '双击行可查看文档内容。上传或删除文档后，请点击「重建索引」才会更新向量库；重建可能需数分钟（本地 Embedding）。';
+
 const docs = ref<RagDocItem[]>([]);
+/** 输入框草稿；真正过滤用 nameQuery，仅回车 / 清空时更新 */
+const nameInput = ref('');
+const nameQuery = ref('');
 const loading = ref(false);
+
+function applyNameSearch() {
+  nameQuery.value = nameInput.value.trim();
+}
+
+/** 按文件名模糊过滤（忽略大小写） */
+const filteredDocs = computed(() => {
+  const kw = nameQuery.value.toLowerCase();
+  if (!kw) return docs.value;
+  return docs.value.filter((d) => d.name.toLowerCase().includes(kw));
+});
 const saving = ref(false);
 const reindexing = ref(false);
 
@@ -433,7 +470,16 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.docs-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .docs-title {
@@ -441,13 +487,37 @@ onMounted(() => {
   font-size: 20px;
   font-weight: 600;
   color: #1f2329;
+  flex-shrink: 0;
 }
 
 .docs-hint {
-  margin: 0 0 16px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.4;
+  cursor: default;
+}
+
+.docs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.docs-search {
+  width: 280px;
+  max-width: 100%;
+}
+
+.docs-count {
+  flex-shrink: 0;
   font-size: 13px;
   color: #8a8f98;
-  line-height: 1.5;
 }
 
 .docs-table-wrap {
