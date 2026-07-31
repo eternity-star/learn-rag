@@ -60,7 +60,8 @@
               >
                 {{ msg.content }}
               </div>
-              <div v-if="msg.citations?.length" class="citations">
+              <!-- 流式过程中可能已收到 citations，等本条回答收尾（有 time）再展示 -->
+              <div v-if="msg.citations?.length && msg.time" class="citations">
                 <div class="citations-title">
                   <n-icon :component="FileTextOutlined" :size="14" />
                   <span>参考来源</span>
