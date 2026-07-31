@@ -323,7 +323,11 @@ const pendingRetry = ref(false);
 
 const showPrompts = ref(false);
 const filteredPrompts = ref([]);
-const promptList = ref([]);
+const promptList = ref([
+  { label: '电生理如何接入报告', value: '电生理如何接入报告' },
+  { label: '采集卡如何设置', value: '采集卡如何设置' },
+  { label: '分析调阅报路径找不到', value: '分析调阅报路径找不到' },
+]);
 const selectedPrompt = ref(null);
 
 const messageContainer = ref<typeof HTMLElement>();
