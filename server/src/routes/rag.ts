@@ -56,7 +56,8 @@ ${hitsText}`;
       ...messages.filter((m) => m.role !== 'system'),
     ];
 
-    const stream = await chatCompletionStream(chatMessages);
+    const model = req.body?.model as string | undefined;
+    const stream = await chatCompletionStream(chatMessages, model);
     const iterator = stream[Symbol.asyncIterator]();
 
     // 关键：先读第一块。无效 Key / 上游 4xx 多数在这里抛错。

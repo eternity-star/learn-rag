@@ -25,7 +25,8 @@ router.post('/api/chat/index', async (req, res) => {
       return;
     }
 
-    const content = await chatCompletion(messages);
+    const model = req.body?.model as string | undefined;
+    const content = await chatCompletion(messages, model);
     res.json({ content });
   } catch (err) {
     console.error(err);
@@ -49,7 +50,8 @@ router.post('/api/chat/stream', async (req, res) => {
       return;
     }
 
-    const stream = await chatCompletionStream(messages);
+    const model = req.body?.model as string | undefined;
+    const stream = await chatCompletionStream(messages, model);
     const iterator = stream[Symbol.asyncIterator]();
 
     // 关键：先读第一块。无效 Key / 上游 4xx 多数在这里抛错。

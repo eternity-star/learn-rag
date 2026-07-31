@@ -119,6 +119,18 @@
         <div class="input-toolbar">
           <div class="toolbar-left">
             <n-select
+              v-model:value="selectedModel"
+              class="model-select"
+              size="small"
+              filterable
+              :options="modelOptions"
+              :loading="modelsLoading"
+              :disabled="!isAllowInput"
+              :render-option="renderModelOption"
+              :title="selectedModel || undefined"
+              placeholder="模型"
+            />
+            <n-select
               v-model:value="systemPromptKey"
               class="system-prompt-select"
               size="small"
@@ -169,12 +181,16 @@
   </div>
 </template>
 <script setup lang="ts">
+import { h, type VNode } from 'vue';
 import { useRoute } from 'vue-router';
+import { NTooltip, type SelectOption } from 'naive-ui';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { isJSON } from '@/utils/obj';
 import { MarkdownView } from '@/components';
 import type { ChatMessage, RagCitation, SystemPromptKey } from '@/types/chat';
 import { SYSTEM_PROMPT_CONTENT, SYSTEM_PROMPT_OPTIONS } from '@/constants/system-prompt';
+import { fetchModels } from '@/services';
+import { getApiError } from '@/services/http';
 
 import AudioOutlined from '~icons/ant-design/audio-outlined';
 import AudioFilled from '~icons/ant-design/audio-filled';
@@ -214,6 +230,46 @@ const newMessage = ref(''); // 输入框内容
 const isSending = ref(false); // 发送状态
 
 const systemPromptKey = ref<SystemPromptKey>(null);
+const selectedModel = ref<string | null>(null);
+const modelOptions = ref<Array<{ label: string; value: string }>>([]);
+const modelsLoading = ref(false);
+
+/** 下拉选项过长时，悬浮展示完整模型名（单行不换行） */
+function renderModelOption({ node, option }: { node: VNode; option: SelectOption }) {
+  const text = String(option.label ?? option.value ?? '');
+  return h(
+    NTooltip,
+    {
+      placement: 'right',
+      delay: 300,
+      contentStyle: {
+        whiteSpace: 'nowrap',
+        maxWidth: 'none',
+      },
+    },
+    {
+      trigger: () => node,
+      default: () => text,
+    },
+  );
+}
+
+async function loadModels() {
+  modelsLoading.value = true;
+  try {
+    const { data } = await fetchModels();
+    const list = data?.models ?? [];
+    modelOptions.value = list.map((m) => ({ label: m.id, value: m.id }));
+    const fallback = data?.defaultModel || list[0]?.id || null;
+    if (!selectedModel.value || !list.some((m) => m.id === selectedModel.value)) {
+      selectedModel.value = fallback;
+    }
+  } catch (err) {
+    message.error(getApiError(err, '加载模型列表失败'));
+  } finally {
+    modelsLoading.value = false;
+  }
+}
 
 /**
  * 同步 messages 最前面的 system 消息：
@@ -307,6 +363,7 @@ function handlerMessageParams() {
         role: msg.role,
         content: msg.content,
       })),
+      model: selectedModel.value || undefined,
       // type: type.value,
       // aiType: aiType.value,
       // question: newMessage.value,
@@ -324,6 +381,7 @@ function handlerMessageParams() {
       type: selectedBusiness.value?.instructType,
       question: newMessage.value,
       chatId: chatId.value,
+      model: selectedModel.value || undefined,
     });
   }
   return params;
@@ -765,6 +823,7 @@ watch(
 );
 
 onMounted(() => {
+  loadModels();
   if (isSendOnMount.value) sendMessage();
 });
 
@@ -1081,6 +1140,10 @@ onUnmounted(() => {
 
     .toolbar-left {
       flex: 1;
+    }
+
+    .model-select {
+      width: 180px;
     }
 
     .system-prompt-select {

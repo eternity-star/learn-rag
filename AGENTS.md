@@ -51,13 +51,14 @@ learn-rag/
     │   ├── docs/             # 知识库 Markdown 源
     │   └── chunks.json       # 构建产物（gitignore，需本地 build）
     └── src/
-        ├── index.ts          # 注册 chat + rag 路由，/health
+        ├── index.ts          # 注册 chat + rag + models 路由，/health
         ├── routes/
         │   ├── chat.ts       # /api/chat/index、/api/chat/stream
         │   ├── rag.ts        # /api/rag/stream、/api/rag/reindex
-        │   └── docs.ts       # /api/rag/docs 列表/上传/删除
+        │   ├── docs.ts       # /api/rag/docs 列表/上传/删除
+        │   └── models.ts     # /api/models 可选模型列表
         ├── services/
-        │   ├── deepseek.ts   # OpenAI SDK → DeepSeek
+        │   ├── deepseek.ts   # OpenAI SDK → DeepSeek（含 listModels）
         │   ├── chunk.ts      # 固定字数切分 + overlap
         │   ├── embedding.ts  # 本地 Transformers.js
         │   ├── docs.ts       # 知识库源文件读写（与 Indexer 解耦）
@@ -123,9 +124,10 @@ cd server && pnpm exec tsx scripts/build-index.ts
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/rag/stream` | **当前前端主路径**：retrieve → 拼 prompt → SSE；先发 `citations` 再发 `content` |
-| POST | `/api/chat/stream` | 纯聊天 SSE（不检索） |
-| POST | `/api/chat/index` | 纯聊天非流式 |
+| POST | `/api/rag/stream` | **当前前端主路径**：retrieve → 拼 prompt → SSE；先发 `citations` 再发 `content`；可选 body.`model` |
+| POST | `/api/chat/stream` | 纯聊天 SSE（不检索）；可选 body.`model` |
+| POST | `/api/chat/index` | 纯聊天非流式；可选 body.`model` |
+| GET | `/api/models` | 可选模型列表（封装上游 `{DEEPSEEK_BASE_URL}/models`） |
 | GET | `/health` | 健康检查 |
 
 ### 5.2 RAG 主路径
@@ -159,9 +161,9 @@ AiChat.vue
 
 | 文件 | 职责 |
 |------|------|
-| `Chat.vue` | 发消息、调 `/api/rag/stream`、解析 citations、停止/重试 |
+| `Chat.vue` | 发消息、调 `/api/rag/stream`、模型选择、解析 citations、停止/重试 |
 | `ChatRecord.vue` | 历史列表（未完全接到新后端） |
-| `types/chat.d.ts` | `ChatMessage`、`RagCitation`、`SystemPromptKey` |
+| `types/chat.d.ts` | `ChatMessage`、`RagCitation`、`SystemPromptKey`、`LlmModelItem` |
 | `constants/system-prompt.ts` | 简洁 / 详细 / 翻译 / 结构化 |
 
 流式要点：`fetchEventSource` + `AbortController`；SSE 事件里可能先出现 `citations` 数组。

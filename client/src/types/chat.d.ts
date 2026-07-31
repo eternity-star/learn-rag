@@ -20,3 +20,12 @@ export type RagCitation = {
   text: string;
   score: number;
 };
+
+/** 上游可选模型（对应官方 /v1/models 的 data 项） */
+export type LlmModelItem = {
+  id: string;
+  object?: string;
+  created?: number;
+  ownedBy?: string;
+  supportedEndpointTypes?: string[];
+};

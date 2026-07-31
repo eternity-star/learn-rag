@@ -1,5 +1,5 @@
 import { http } from '../http';
-import type { ChatMessage } from '@/types/chat';
+import type { ChatMessage, LlmModelItem } from '@/types/chat';
 import type { HttpResponse } from '../http/types';
 
 /**
@@ -14,5 +14,15 @@ export const chatIndex = (
     url: '/chat/index',
     method: 'POST',
     data: { messages },
+  });
+};
+
+/** 查询可选模型（后端封装上游 /v1/models） */
+export const fetchModels = (): Promise<
+  HttpResponse<{ models: LlmModelItem[]; defaultModel: string }>
+> => {
+  return http.request({
+    url: '/models',
+    method: 'GET',
   });
 };
