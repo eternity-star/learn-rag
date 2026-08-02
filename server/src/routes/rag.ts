@@ -15,7 +15,7 @@ import { retrieve } from '../services/indexer.js';
 import { Indexer } from '../services/indexer.js';
 
 const router = Router();
-const MIN_SCORE = 0.35; // 可按实测再调
+const MIN_SCORE = 0.6; // 可按实测再调
 
 router.post('/api/rag/stream', async (req, res) => {
   try {
@@ -40,6 +40,7 @@ router.post('/api/rag/stream', async (req, res) => {
       relevantHits.length === 0
         ? `你是知识库助手。当前没有足够相关的参考资料，请直接回答「根据现有知识库，我不知道」或说明资料不足，不要编造。`
         : `你是知识库助手。只根据「参考资料」回答；资料不足就说不知道，不要编造。
+参考资料未直接写明价格/下载地址/官网时，必须回答不知道，禁止猜测。
 参考资料：
 ${hitsText}`;
 
