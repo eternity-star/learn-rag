@@ -1,55 +1,145 @@
 import type { Chunk } from '../types/chunk.js';
 
-/**
- * 按固定字数切分文本
- * @param source 来源文件名
- * @param text 整篇正文
- * @param size 每段最多多少字（中文按字符数即可）
- * @param overlap 下一段往回重叠多少字
- * @returns 切好的片段数组
- */
-export function chunkText(source: string, text: string, size = 400, overlap = 50): Chunk[] {
-  /**
-   * 为什么需要overlap？
-   * 把一篇长文切成多段，相邻段有一点重叠，避免句子被拦腰切断后检索丢上下文。
-   */
+type MdSection = {
+  /** 标题面包屑，如 ["二、具体操作细节"] */
+  headings: string[];
+  /** 含本节标题行在内的正文 */
+  content: string;
+};
 
-  // 1. 去掉首尾空白；统一换行，避免奇怪空白
+/** 匹配 Markdown 标题；标题文案不能为空 */
+const HEADING_RE = /^(#{1,6})\s+(\S.*)$/;
+
+/**
+ * 按 Markdown 一级/二级标题（# / ##）切分。
+ * ### 及以下保留在父节内，避免把「参数列表」和「参数说明」拆散导致检索变差。
+ * 无有效标题时回退固定字数切分；单节过长再按 size/overlap 细分。
+ */
+export function chunkText(source: string, text: string, size = 1000, overlap = 100): Chunk[] {
   const cleaned = text.replace(/\r\n/g, '\n').trim();
   if (!cleaned) return [];
 
-  // 2. 防御：重叠不能大于等于 size，否则会死循环
-  const step = Math.max(1, size - overlap);
+  const sections = splitByMarkdownHeadings(cleaned);
+
+  if (sections.length === 0) {
+    return chunkBySize(source, cleaned, size, overlap, docPrefix(source));
+  }
 
   const chunks: Chunk[] = [];
-  let start = 0; // 当前切片的起始位置
-  let index = 0; // 片段序号，从 1 开始
+  let index = 0;
 
-  // 2.1 获取标题，作为前缀
-  const h1 = cleaned.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? '';
-  const prefix = h1 ? `文档：${source}（${h1}）\n\n` : `文档：${source}\n\n`;
+  for (const section of sections) {
+    const body = section.content.trim();
+    if (!body) continue;
 
-  // 3. 滑动窗口往前切
-  while (start < cleaned.length) {
-    const end = Math.min(start + size, cleaned.length);
-    const piece = cleaned.slice(start, end).trim();
+    const prefix = sectionPrefix(source, section.headings);
 
-    if (piece) {
+    if (body.length <= size) {
       chunks.push({
-        // id 要唯一：文件名 + 序号
-        id: `${source}#${index}`,
+        id: `${source}#${index++}`,
+        source,
+        text: `${prefix}${body}`,
+      });
+      continue;
+    }
+
+    for (const piece of splitBySize(body, size, overlap)) {
+      chunks.push({
+        id: `${source}#${index++}`,
         source,
         text: `${prefix}${piece}`,
       });
-      index++;
     }
-
-    // 已经到文末就结束
-    if (end >= cleaned.length) break;
-
-    // 下一段起点 = 当前起点 + 步长（size - overlap）
-    start += step;
   }
 
   return chunks;
+}
+
+/**
+ * 仅在 h1/h2 处切开；h3+ 当作正文。
+ * 全文没有有效 h1/h2 时返回 []（走字数回退）。
+ */
+function splitByMarkdownHeadings(text: string): MdSection[] {
+  const lines = text.split('\n');
+  const sections: MdSection[] = [];
+  const stack: { level: number; title: string }[] = [];
+  let buf: string[] = [];
+  let sawSplitHeading = false;
+
+  const flush = () => {
+    const content = buf.join('\n').trim();
+    buf = [];
+    if (!content) return;
+    const nonEmpty = content.split('\n').filter((l) => l.trim());
+    // 只有一行且是标题：无正文，不成段
+    if (nonEmpty.length === 1 && HEADING_RE.test(nonEmpty[0]!)) return;
+    sections.push({
+      headings: stack.map((s) => s.title),
+      content,
+    });
+  };
+
+  for (const line of lines) {
+    const match = line.match(HEADING_RE);
+    if (match) {
+      const level = match[1]!.length;
+      const title = match[2]!.trim();
+
+      // 只把 # / ## 当作切分点；###+ 留在当前节
+      if (level <= 2) {
+        sawSplitHeading = true;
+        flush();
+        while (stack.length > 0 && stack[stack.length - 1]!.level >= level) {
+          stack.pop();
+        }
+        stack.push({ level, title });
+      }
+      buf.push(line);
+    } else {
+      buf.push(line);
+    }
+  }
+  flush();
+
+  return sawSplitHeading ? sections : [];
+}
+
+function docPrefix(source: string): string {
+  return `文档：${source}\n\n`;
+}
+
+function sectionPrefix(source: string, headings: string[]): string {
+  if (headings.length === 0) return docPrefix(source);
+  return `文档：${source}\n章节：${headings.join(' > ')}\n\n`;
+}
+
+function chunkBySize(
+  source: string,
+  text: string,
+  size: number,
+  overlap: number,
+  prefix: string,
+): Chunk[] {
+  const pieces = splitBySize(text, size, overlap);
+  return pieces.map((piece, index) => ({
+    id: `${source}#${index}`,
+    source,
+    text: `${prefix}${piece}`,
+  }));
+}
+
+function splitBySize(text: string, size: number, overlap: number): string[] {
+  const step = Math.max(1, size - overlap);
+  const pieces: string[] = [];
+  let start = 0;
+
+  while (start < text.length) {
+    const end = Math.min(start + size, text.length);
+    const piece = text.slice(start, end).trim();
+    if (piece) pieces.push(piece);
+    if (end >= text.length) break;
+    start += step;
+  }
+
+  return pieces;
 }

@@ -15,7 +15,7 @@ import { retrieve } from '../services/indexer.js';
 import { Indexer } from '../services/indexer.js';
 
 const router = Router();
-const MIN_SCORE = 0.6; // 可按实测再调
+const MIN_SCORE = 0.45; // 略降以保证召回；拒答主要靠 prompt + 无命中
 
 router.post('/api/rag/stream', async (req, res) => {
   try {
@@ -32,9 +32,8 @@ router.post('/api/rag/stream', async (req, res) => {
       res.status(400).json({ error: '缺少用户问题' });
       return;
     }
-    const hits = await retrieve(question, 3);
-    const topScore = hits[0]?.score ?? 0;
-    const relevantHits = hits.length > 0 && topScore >= MIN_SCORE ? hits : [];
+    const hits = await retrieve(question, 5);
+    const relevantHits = hits.filter((h) => h.score >= MIN_SCORE) || [];
     const hitsText = relevantHits.map((h, i) => `[${i + 1}] (${h.source}) ${h.text}`).join('\n\n');
     const ragSystemPrompt =
       relevantHits.length === 0

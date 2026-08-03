@@ -63,11 +63,12 @@ export class Indexer {
 /** 从问题里抽关键词，用来匹配 source 文件名 */
 function extractQueryTokens(query: string): string[] {
   const q = query.toLowerCase();
-  // 连续英文/数字（pacs、iho、lis…）
-  const latin = q.match(/[a-z][a-z0-9-]{1,}/g) ?? [];
-  // 再加一点中文专有词（按你的库扩展）
+  // 连续英文/数字（pacs、iho、lis…）；过短易误伤（如 ho 命中大量文件名）
+  const latin = (q.match(/[a-z][a-z0-9-]{2,}/g) ?? []).filter((t) => t.length >= 3);
   const extras: string[] = [];
   if (q.includes('影像')) extras.push('pacs');
+  if (q.includes('采集卡')) extras.push('采集卡');
+  if (q.includes('电生理')) extras.push('电生理');
   return [...new Set([...latin, ...extras])];
 }
 
@@ -76,10 +77,9 @@ function calcSourceBoost(source: string, tokens: string[]): number {
   // 命中任意 keywords 就加分；多个命中可累加，设上限避免爆表
   let boost = 0;
   tokens.forEach((t) => {
-    // 命中则加权重 暂定0.08
-    if (t.length > 0 && s.includes(t)) boost += 0.08;
+    const key = t.toLowerCase();
+    if (key.length >= 2 && s.includes(key)) boost += 0.08;
   });
-  // 上限最高0.2
   return Math.min(boost, 0.2);
 }
 
