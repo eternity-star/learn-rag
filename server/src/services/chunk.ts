@@ -32,22 +32,18 @@ export function chunkText(source: string, text: string, size = 1000, overlap = 1
     const body = section.content.trim();
     if (!body) continue;
 
-    const prefix = sectionPrefix(source, section.headings);
+    // 过长时优先按 ### 再切；短节也统一成 { headings, content }，避免类型不一致
+    const pieces =
+      body.length <= size
+        ? [{ headings: section.headings, content: body }]
+        : splitOversizedSection(body, section.headings, size, overlap);
 
-    if (body.length <= size) {
+    for (const piece of pieces) {
+      const piecePrefix = sectionPrefix(source, piece.headings ?? section.headings);
       chunks.push({
         id: `${source}#${index++}`,
         source,
-        text: `${prefix}${body}`,
-      });
-      continue;
-    }
-
-    for (const piece of splitBySize(body, size, overlap)) {
-      chunks.push({
-        id: `${source}#${index++}`,
-        source,
-        text: `${prefix}${piece}`,
+        text: `${piecePrefix}${piece.content}`,
       });
     }
   }
@@ -104,6 +100,76 @@ function splitByMarkdownHeadings(text: string): MdSection[] {
   return sawSplitHeading ? sections : [];
 }
 
+/**
+ * 超长 h2 节：先按 ### 切开；仍过长再字数切。
+ * 返回带完整面包屑的子片。
+ */
+function splitOversizedSection(
+  body: string,
+  parentHeadings: string[],
+  size: number,
+  overlap: number,
+): { headings: string[]; content: string }[] {
+  const subSections = splitByHeadingLevel(body, 3);
+  const out: { headings: string[]; content: string }[] = [];
+
+  if (subSections.length <= 1) {
+    for (const piece of splitBySize(body, size, overlap)) {
+      out.push({ headings: parentHeadings, content: piece });
+    }
+    return out;
+  }
+
+  for (const sub of subSections) {
+    const headings = [...parentHeadings, ...sub.headings];
+    const content = sub.content.trim();
+    if (!content) continue;
+    if (content.length <= size) {
+      out.push({ headings, content });
+      continue;
+    }
+    for (const piece of splitBySize(content, size, overlap)) {
+      out.push({ headings, content: piece });
+    }
+  }
+  return out;
+}
+
+/** 按指定级别标题切开（如 level=3 只在 ### 处切） */
+function splitByHeadingLevel(text: string, level: number): MdSection[] {
+  const lines = text.split('\n');
+  const sections: MdSection[] = [];
+  let currentTitle = '';
+  let buf: string[] = [];
+  let saw = false;
+
+  const flush = () => {
+    const content = buf.join('\n').trim();
+    buf = [];
+    if (!content) return;
+    sections.push({
+      headings: currentTitle ? [currentTitle] : [],
+      content,
+    });
+  };
+
+  const re = new RegExp(`^(#{${level}})\\s+(\\S.*)$`);
+
+  for (const line of lines) {
+    const match = line.match(re);
+    if (match) {
+      saw = true;
+      flush();
+      currentTitle = match[2]!.trim();
+      buf.push(line);
+    } else {
+      buf.push(line);
+    }
+  }
+  flush();
+  return saw ? sections : [{ headings: [], content: text }];
+}
+
 function docPrefix(source: string): string {
   return `文档：${source}\n\n`;
 }
@@ -128,6 +194,13 @@ function chunkBySize(
   }));
 }
 
+/**
+ * 全文按指定长度切分
+ * @param text 文本
+ * @param size 长度
+ * @param overlap 重叠长度
+ * @returns 切分后的文本数组
+ */
 function splitBySize(text: string, size: number, overlap: number): string[] {
   const step = Math.max(1, size - overlap);
   const pieces: string[] = [];
