@@ -378,21 +378,26 @@ function confirmDelete(row: RagDocItem) {
 }
 
 function onReindex() {
-  dialog.info({
+  const d = dialog.info({
     title: '重建索引',
     content: '将对 data/docs 下全部文档重新切分并生成向量，可能需要数分钟，确定继续？',
     positiveText: '开始重建',
     negativeText: '取消',
-    onPositiveClick: async () => {
+    onPositiveClick: () => {
+      d.loading = true;
       reindexing.value = true;
-      try {
-        const { data } = await reindexDocs();
-        message.success(`索引重建完成，共 ${data.chunks} 个片段`);
-      } catch (err) {
-        message.error(getApiError(err, '重建索引失败'));
-      } finally {
-        reindexing.value = false;
-      }
+      return reindexDocs()
+        .then(({ data }) => {
+          message.success(`索引重建完成，共 ${data.chunks} 个片段`);
+        })
+        .catch((err) => {
+          message.error(getApiError(err, '重建索引失败'));
+          return false;
+        })
+        .finally(() => {
+          d.loading = false;
+          reindexing.value = false;
+        });
     },
   });
 }
