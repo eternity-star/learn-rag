@@ -7,10 +7,9 @@ import {
   getStreamDelta,
   initSseHeaders,
   flushSse,
-  writeSseContent,
+  writeSse,
   writeSseDone,
   writeSseError,
-  writeSseCitations,
 } from '../utils/sse.js';
 import { retrieve } from '../services/indexer.js';
 import { Indexer } from '../services/indexer.js';
@@ -78,7 +77,7 @@ ${hitsText}`;
       if (!delta) return;
       const isFirstContent = !hasContent;
       hasContent = true;
-      writeSseContent(res, delta);
+      writeSse(res, { content: delta });
       // 仅首包正文强制 flush，尽快上屏
       if (isFirstContent) flushSse(res);
     };
@@ -102,16 +101,15 @@ ${hitsText}`;
     // 引用放到正文流结束后再发：
     // 1) 前端本就等回答收尾才展示 citations
     // 2) 避免大包 citations 插在「空 role 首包」与「首个 content」之间，造成 1s+ 空窗观感
-    writeSseCitations(
-      res,
-      relevantHits.map((h) => ({
+    writeSse(res, {
+      citations: relevantHits.map((h) => ({
         id: h.id,
         source: h.source,
         // 卡片只做摘要展示，截断减小尾包体积
         text: h.text.length > 240 ? `${h.text.slice(0, 240)}…` : h.text,
         score: h.score,
       })),
-    );
+    });
     writeSseDone(res);
   } catch (err) {
     console.error(err);

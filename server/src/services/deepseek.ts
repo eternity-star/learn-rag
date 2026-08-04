@@ -15,6 +15,14 @@ const client = new OpenAI({
   baseURL,
 });
 
+/**
+ * 获取OpenAI客户端
+ * @returns OpenAI客户端
+ */
+export function getLlmClient() {
+  return client;
+}
+
 export function getDefaultModel() {
   return process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat';
 }

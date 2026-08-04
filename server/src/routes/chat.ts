@@ -6,7 +6,7 @@ import {
   getStreamChunkError,
   getStreamDelta,
   initSseHeaders,
-  writeSseContent,
+  writeSse,
   writeSseDone,
   writeSseError,
 } from '../utils/sse.js';
@@ -70,7 +70,7 @@ router.post('/api/chat/stream', async (req, res) => {
       const delta = getStreamDelta(chunk);
       if (!delta) return;
       hasContent = true;
-      writeSseContent(res, delta);
+      writeSse(res, { content: delta });
     };
 
     if (!first.done) {

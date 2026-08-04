@@ -607,7 +607,8 @@ async function sendMessage() {
   if (isTextMsg.value) {
     messages.value.push(aiReturnMsg);
   }
-  const url = '/api/rag/stream';
+  // const url = '/api/rag/stream';
+  const url = '/api/agent/stream';
   isSending.value = true;
   aiReturnMsg.isMsgLoading = true;
   // 发送消息
@@ -648,6 +649,15 @@ async function sendMessage() {
         let obj = JSON.parse(str);
         if (obj) {
           obj = isJSON(obj) ? JSON.parse(obj) : obj;
+
+          if (obj?.event === 'tool_start') {
+            // 可选：aiReturnMsg.content 旁显示「正在检索…」
+            return;
+          }
+          if (obj?.event === 'tool_end') {
+            // 可选：aiReturnMsg.content 旁显示「检索完成」
+            return;
+          }
 
           // 处理引用
           if (obj?.citations && Array.isArray(obj.citations)) {

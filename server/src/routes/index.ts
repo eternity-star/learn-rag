@@ -3,3 +3,4 @@ export { default as ragRoutes } from './rag.ts';
 export { default as docsRoutes } from './docs.ts';
 export { default as modelsRoutes } from './models.ts';
 export { default as conversationsRoutes } from './conversations.ts';
+export { default as agentRoutes } from './agent.ts';

@@ -11,9 +11,21 @@ export function writeSseError(res: Response, error: string) {
   res.end();
 }
 
-/** 写入一条 SSE 文本增量 */
-export function writeSseContent(res: Response, content: string) {
-  res.write(`data: ${JSON.stringify({ content })}\n\n`);
+/** 文本增量 */
+export type SseContentPayload = { content: string };
+/** 引用标记（Citation ≡ RetrieveHit） */
+export type SseCitationsPayload = { citations: Citation[] };
+/** 通用事件（如 tool_start / tool_end） */
+export type SseEventPayload = Record<string, unknown>;
+
+/** 写入 SSE 文本增量 */
+export function writeSse(res: Response, payload: SseContentPayload): void;
+/** 写入 SSE 引用标记 */
+export function writeSse(res: Response, payload: SseCitationsPayload): void;
+/** 写入通用 SSE 事件 */
+export function writeSse(res: Response, payload: SseEventPayload): void;
+export function writeSse(res: Response, payload: SseEventPayload): void {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
 /** 写入 SSE 结束标记并结束响应 */
@@ -56,9 +68,4 @@ export function getStreamChunkError(chunk: unknown): string | null {
 export function getStreamDelta(chunk: unknown): string | null {
   if (!chunk || typeof chunk !== 'object') return null;
   return (chunk as StreamChunk).choices?.[0]?.delta?.content || null;
-}
-
-/** 写入 SSE 引用标记（Citation ≡ RetrieveHit） */
-export function writeSseCitations(res: Response, citations: Citation[]) {
-  res.write(`data: ${JSON.stringify({ citations })}\n\n`);
 }

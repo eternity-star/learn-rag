@@ -1,7 +1,14 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
-import { chatRoutes, ragRoutes, docsRoutes, modelsRoutes, conversationsRoutes } from './routes';
+import {
+  chatRoutes,
+  ragRoutes,
+  docsRoutes,
+  modelsRoutes,
+  conversationsRoutes,
+  agentRoutes,
+} from './routes';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -16,6 +23,7 @@ app.use(ragRoutes);
 app.use(docsRoutes);
 app.use(modelsRoutes);
 app.use(conversationsRoutes);
+app.use(agentRoutes);
 
 // 健康检查：用来确认服务已启动
 app.get('/health', (_req, res) => {
