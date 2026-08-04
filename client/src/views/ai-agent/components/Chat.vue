@@ -30,8 +30,11 @@
                 <n-icon :component="UserOutlined" />
               </n-avatar>
             </div>
-            <div v-if="msg.isMsgLoading" class="return-message-body return-message-loading">
-              <span class="mr5">回答中</span>
+            <div
+              v-if="msg.isMsgLoading || msg.isRetrieving"
+              class="return-message-body return-message-loading"
+            >
+              <span class="mr5">{{ msg.isRetrieving ? '正在检索知识库…' : '回答中' }}</span>
               <div class="loading-dots">
                 <span class="dot"></span>
                 <span class="dot"></span>
@@ -531,6 +534,7 @@ function finalizeStreamMsg(
 
   if (aiReturnMsg) {
     aiReturnMsg.isMsgLoading = false;
+    aiReturnMsg.isRetrieving = false;
     if (!aiReturnMsg.time) {
       aiReturnMsg.time = new Date().toLocaleTimeString();
     }
@@ -599,6 +603,7 @@ async function sendMessage() {
     role: 'assistant',
     time: '',
     isMsgLoading: false, // 消息是否显示加载中 当是流式返回json时需要等待全部数据返回后在停止渲染；当流式返回文本时不需要等待全部数据返回后在停止渲染
+    isRetrieving: false,
     isError: false,
     citations: [] as RagCitation[],
   });
@@ -638,9 +643,6 @@ async function sendMessage() {
     // 接收流式数据
     onmessage(res) {
       if (streamSettled.value) return;
-      if (isTextMsg.value) {
-        aiReturnMsg.isMsgLoading = false;
-      }
       let value = res?.data || '';
       if (!value || value === '[DONE]') return;
 
@@ -651,11 +653,15 @@ async function sendMessage() {
           obj = isJSON(obj) ? JSON.parse(obj) : obj;
 
           if (obj?.event === 'tool_start') {
-            // 可选：aiReturnMsg.content 旁显示「正在检索…」
+            aiReturnMsg.isRetrieving = true;
+            aiReturnMsg.isMsgLoading = false;
             return;
           }
           if (obj?.event === 'tool_end') {
-            // 可选：aiReturnMsg.content 旁显示「检索完成」
+            aiReturnMsg.isRetrieving = false;
+            if (!aiReturnMsg.content) {
+              aiReturnMsg.isMsgLoading = true;
+            }
             return;
           }
 
@@ -682,6 +688,10 @@ async function sendMessage() {
           }
           let stri = obj?.content;
           if (stri) {
+            aiReturnMsg.isRetrieving = false;
+            if (isTextMsg.value) {
+              aiReturnMsg.isMsgLoading = false;
+            }
             aiReturnMsg.content += stri;
           }
         }

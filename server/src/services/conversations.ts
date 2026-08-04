@@ -65,7 +65,7 @@ function nowIso() {
 }
 
 /**
- * 去掉 isMsgLoading 等临时字段
+ * 清理消息中的临时字段
  * @param messages 消息
  * @returns 去掉临时字段后的消息
  */
