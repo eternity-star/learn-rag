@@ -27,7 +27,15 @@ export function initSseHeaders(res: Response) {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  // 避免反向代理缓冲整段 SSE
+  res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders?.();
+}
+
+/** 尽快把已 write 的 SSE 帧刷给客户端（若存在 compression 等中间件） */
+export function flushSse(res: Response) {
+  const flushable = res as Response & { flush?: () => void };
+  flushable.flush?.();
 }
 
 type StreamChunk = {

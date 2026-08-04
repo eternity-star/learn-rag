@@ -124,7 +124,7 @@ cd server && pnpm exec tsx scripts/build-index.ts
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/rag/stream` | **当前前端主路径**：retrieve → 拼 prompt → SSE；先发 `citations` 再发 `content`；可选 body.`model` |
+| POST | `/api/rag/stream` | **当前前端主路径**：retrieve → 拼 prompt → SSE；先发 `content`*，收尾再发 `citations` → `[DONE]`；可选 body.`model` |
 | POST | `/api/chat/stream` | 纯聊天 SSE（不检索）；可选 body.`model` |
 | POST | `/api/chat/index` | 纯聊天非流式；可选 body.`model` |
 | GET | `/api/models` | 可选模型列表（封装上游 `{DEEPSEEK_BASE_URL}/models`） |
@@ -139,7 +139,7 @@ Chat.vue
   → 若 topScore < MIN_SCORE(0.35) → 空引用 + 拒答约束
   → 否则把 Top-K 片段写入 system「参考资料」
   → chatCompletionStream(DeepSeek)
-  → SSE: { citations } → { content }* → [DONE]
+  → SSE: { content }* → { citations } → [DONE]
   → 前端气泡展示引用卡片（source / text / score）
 ```
 

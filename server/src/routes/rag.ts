@@ -6,6 +6,7 @@ import {
   getStreamChunkError,
   getStreamDelta,
   initSseHeaders,
+  flushSse,
   writeSseContent,
   writeSseDone,
   writeSseError,
@@ -65,17 +66,6 @@ ${hitsText}`;
 
     initSseHeaders(res);
 
-    // 先发引用，再发正文增量
-    writeSseCitations(
-      res,
-      relevantHits.map((h) => ({
-        id: h.id,
-        source: h.source,
-        text: h.text,
-        score: h.score,
-      })),
-    );
-
     let hasContent = false;
 
     // 依赖本请求的 res / hasContent，留在路由闭包内，不要提到模块顶层
@@ -86,8 +76,11 @@ ${hitsText}`;
       }
       const delta = getStreamDelta(chunk);
       if (!delta) return;
+      const isFirstContent = !hasContent;
       hasContent = true;
       writeSseContent(res, delta);
+      // 仅首包正文强制 flush，尽快上屏
+      if (isFirstContent) flushSse(res);
     };
 
     if (!first.done) {
@@ -106,6 +99,19 @@ ${hitsText}`;
       return;
     }
 
+    // 引用放到正文流结束后再发：
+    // 1) 前端本就等回答收尾才展示 citations
+    // 2) 避免大包 citations 插在「空 role 首包」与「首个 content」之间，造成 1s+ 空窗观感
+    writeSseCitations(
+      res,
+      relevantHits.map((h) => ({
+        id: h.id,
+        source: h.source,
+        // 卡片只做摘要展示，截断减小尾包体积
+        text: h.text.length > 240 ? `${h.text.slice(0, 240)}…` : h.text,
+        score: h.score,
+      })),
+    );
     writeSseDone(res);
   } catch (err) {
     console.error(err);
