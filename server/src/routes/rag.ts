@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { type ChatMessage } from '../services/deepseek.js';
+import type { ChatMessage } from '../types/chat.js';
 import { chatCompletionStream } from '../services/deepseek.js';
 import { createHttpError, getErrorMessage, getErrorStatus } from '../utils/errors.js';
 import {

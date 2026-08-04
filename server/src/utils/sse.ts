@@ -3,7 +3,7 @@
  */
 
 import type { Response } from 'express';
-import type { RetrieveHit } from '../types/chunk.js';
+import type { Citation } from '../types/chunk.js';
 
 /** 写入一条 SSE 错误事件并结束响应 */
 export function writeSseError(res: Response, error: string) {
@@ -58,7 +58,7 @@ export function getStreamDelta(chunk: unknown): string | null {
   return (chunk as StreamChunk).choices?.[0]?.delta?.content || null;
 }
 
-/** 写入 SSE 引用标记 */
-export function writeSseCitations(res: Response, citations: Array<RetrieveHit>) {
+/** 写入 SSE 引用标记（Citation ≡ RetrieveHit） */
+export function writeSseCitations(res: Response, citations: Citation[]) {
   res.write(`data: ${JSON.stringify({ citations })}\n\n`);
 }

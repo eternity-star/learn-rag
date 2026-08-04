@@ -1,17 +1,7 @@
 import OpenAI from 'openai';
+import type { ChatMessage, LlmModelItem } from '../types/chat.js';
 
-export type ChatMessage = {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-};
-
-export type LlmModelItem = {
-  id: string;
-  object?: string;
-  created?: number;
-  ownedBy?: string;
-  supportedEndpointTypes?: string[];
-};
+export type { ChatMessage, LlmModelItem };
 
 if (!process.env.DEEPSEEK_API_KEY) {
   throw new Error('未配置 DEEPSEEK_API_KEY，请在 server/.env 中设置');

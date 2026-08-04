@@ -8,7 +8,7 @@
 ## 1. 项目定位
 
 - **仓库目标**：前端转 AI 应用工程师的学习与实践（LLM → RAG → Agent）。
-- **当前阶段**：阶段 0–1 完成；阶段 2 **Week1～3 主线基本完成**（手写 RAG + 文档生命周期 + 标题切分 / Hybrid 检索 / 拒答 / 人工评测）。下一步偏 Week4+（会话持久化、引用跳转、可选 pgvector），暂不上 Agent 重框架。
+- **当前阶段**：阶段 0–1 完成；阶段 2 Week1～3 完成；**Week4 会话持久化已用 `conversations` JSON API 打通左右栏**。后续可选 pgvector / 权限；暂不上 Agent 重框架。
 - **主作品方向**：知识库问答（Web），Chat 走 DeepSeek（OpenAI 兼容 / 中转站）；Embedding 用本地 Transformers.js。
 - **学习路线**：见根目录 `learn.md`。踩坑复盘：`项目中遇到的问题.md`。评测题：`rag-eval.md`。
 
@@ -24,7 +24,7 @@ learn-rag/
 ├── rag-eval.md               # RAG 人工评测表（含失败案例）
 ├── 项目中遇到的问题.md        # 踩坑与优化复盘
 ├── pnpm-workspace.yaml       # client + server
-├── .gitignore                # 忽略 docs/、.env、server/data/chunks.json 等
+├── .gitignore                # 忽略 docs/、.env、chunks.json、conversations.json 等
 ├── .cursor/rules/            # Cursor 规则（自动注入）
 ├── .vscode/settings.json     # 含 unocss.root=client
 ├── docs/                     # 本地文档（已被 gitignore，不提交）
@@ -51,21 +51,24 @@ learn-rag/
     ├── scripts/              # build-index / test-chunk / test-embed / test-retrieve
     ├── data/
     │   ├── docs/             # 知识库 Markdown 源
-    │   └── chunks.json       # 构建产物（gitignore，需本地 build）
+    │   ├── chunks.json       # 构建产物（gitignore，需本地 build）
+    │   └── conversations.json # 对话持久化（gitignore）
     └── src/
-        ├── index.ts          # 注册 chat + rag + docs + models，/health
+        ├── index.ts          # 注册 chat + rag + docs + models + conversations
         ├── routes/
         │   ├── chat.ts       # /api/chat/index、/api/chat/stream
         │   ├── rag.ts        # /api/rag/stream、/api/rag/reindex
         │   ├── docs.ts       # /api/rag/docs 列表/上传/删除
+        │   ├── conversations.ts # /api/conversations CRUD
         │   └── models.ts     # /api/models 可选模型列表
         ├── services/
         │   ├── deepseek.ts   # OpenAI SDK → DeepSeek（含 listModels）
         │   ├── chunk.ts      # Markdown 标题切分（#/##，过长再 ###/字数）
         │   ├── embedding.ts  # 本地 Transformers.js
         │   ├── docs.ts       # 知识库源文件读写（与 Indexer 解耦）
+        │   ├── conversations.ts # 对话 JSON 读写
         │   └── indexer.ts    # build / save / load / Hybrid retrieve
-        ├── types/chunk.ts
+        ├── types/            # chat / chunk / conversation（公共类型，见 types/index.ts）
         └── utils/            # errors、sse（含 writeSseCitations）
 ```
 
@@ -134,6 +137,11 @@ cd server && pnpm exec tsx scripts/build-index.ts
 | POST | `/api/chat/stream` | 纯聊天 SSE（不检索）；可选 body.`model` |
 | POST | `/api/chat/index` | 纯聊天非流式；可选 body.`model` |
 | GET | `/api/models` | 可选模型列表 |
+| GET | `/api/conversations/query` | 对话列表（无 messages） |
+| GET | `/api/conversations/get/:id` | 对话详情 |
+| POST | `/api/conversations/create` | 新建对话 |
+| POST | `/api/conversations/update/:id` | 更新 title / messages |
+| POST | `/api/conversations/delete/:id` | 删除对话 |
 | GET | `/health` | 健康检查 |
 
 ### 5.2 RAG 主路径
@@ -164,18 +172,21 @@ data/docs/*.md
 ```text
 AiChat.vue
 ├── SiderTree
-│   ├── #left-content  → ChatRecord（历史；仍偏旧 /process 接口）
-│   └── #right-content → Chat（消息 + 输入 + RAG SSE + 引用）
+│   ├── #left-content  → ChatRecord（/api/conversations）
+│   └── #right-content → Chat（RAG SSE + 结束后 PUT 消息）
 ```
 
 | 文件 | 职责 |
 |------|------|
-| `Chat.vue` | 发消息、调 `/api/rag/stream`、模型选择、解析 citations、停止/重试 |
-| `ChatRecord.vue` | 历史列表（未完全接到新后端） |
-| `types/chat.d.ts` | `ChatMessage`、`RagCitation`、`SystemPromptKey`、`LlmModelItem` |
+| `Chat.vue` | 发消息、`/api/rag/stream`、citations、停止/重试；流结束后持久化对话 |
+| `ChatRecord.vue` | 新建/列表/删除/切换，走 `/api/conversations` |
+| `services/api/conversations-api.ts` | 对话 CRUD 封装 |
+| `server/src/services/conversations.ts` | 读写 `data/conversations.json` |
+| `types/chat.d.ts` | `ChatMessage`、`Conversation`、`RagCitation` 等 |
 | `constants/system-prompt.ts` | 简洁 / 详细 / 翻译 / 结构化 |
 
-流式要点：`fetchEventSource` + `AbortController`；SSE 事件里可能先出现 `citations` 数组。
+流式要点：`fetchEventSource` + `AbortController`；SSE 事件里可能先出现 `citations` 数组。  
+对话命名用 **conversation**（不用 session），便于以后迁 Postgres。
 
 ---
 
@@ -223,7 +234,7 @@ AiChat.vue
 | 2 Week1 手写 RAG | 完成 | 索引 → 检索 → 引用流式回答 |
 | 2 Week2 文档生命周期 | 完成 | docs API + `/docs` 管理页；存储仍为 JSON |
 | 2 Week3 检索质量 | **基本完成** | 标题切分、Hybrid、拒答、`rag-eval.md` |
-| 2 Week4+ | 未开始 | 会话持久化、权限、pgvector |
+| 2 Week4 会话 | **JSON 版完成** | `/api/conversations` + 左右栏打通；pg/权限仍可选 |
 | 3 Agent | 未开始 | — |
 
 ## 10. 已知缺口 / 后续方向
@@ -235,10 +246,10 @@ AiChat.vue
 - [x] 文档上传 / 重建索引 / 删除 + `docs-home`
 - [x] Markdown 标题切分 + 简易 Hybrid（向量 + 关键词）
 - [x] 低分 / 无依据拒答；评测表与失败案例（`rag-eval.md`、`项目中遇到的问题.md`）
-- [ ] 引用点击跳转 `/docs` 对应文件
-- [ ] 中期向量库（pgvector 等）
+- [x] 引用点击预览文档（DocPreviewModal）
+- [x] 对话持久化：`/api/conversations` + `conversations.json` + 左右栏打通
+- [ ] 中期向量库（pgvector 等）；对话表也可一并迁库
 - [ ] Rerank（可选了解）
-- [ ] `AiChat` 左右栏会话与新后端打通
 - [ ] 清理 `Chat.vue` 语音/WebSocket 遗留
 - [ ] Agent / Tool Calling（阶段 3）
 

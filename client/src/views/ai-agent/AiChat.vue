@@ -8,7 +8,11 @@
       />
     </template>
     <template #right-content>
-      <Chat ref="chatRef" :is-page="true" />
+      <Chat
+        ref="chatRef"
+        :is-page="true"
+        @conversation-updated="onConversationUpdated"
+      />
     </template>
   </SiderTree>
 </template>
@@ -16,16 +20,21 @@
 import { SiderTree } from '@/components';
 import ChatRecord from './components/ChatRecord.vue';
 import Chat from './components/Chat.vue';
+import type { ChatMessage, ConversationSummary } from '@/types/chat';
 
 const chatRecordRef = ref<InstanceType<typeof ChatRecord>>();
 const chatRef = ref<InstanceType<typeof Chat>>();
 
-function onChangeChat(_chat: any) {
-  // 预留给父子会话联动
+function onChangeChat(chat: ConversationSummary | null) {
+  chatRef.value?.setConversation?.(chat);
 }
 
-function onChangeChatInfo(_chatInfo: any) {
-  // 预留给历史消息回填
+function onChangeChatInfo(messages: ChatMessage[]) {
+  chatRef.value?.loadMessages?.(messages);
+}
+
+function onConversationUpdated(summary: ConversationSummary) {
+  chatRecordRef.value?.patchSummary?.(summary);
 }
 </script>
 <style lang="less" scoped></style>

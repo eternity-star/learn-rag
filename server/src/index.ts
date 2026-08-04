@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
-import { chatRoutes, ragRoutes, docsRoutes, modelsRoutes } from './routes';
+import { chatRoutes, ragRoutes, docsRoutes, modelsRoutes, conversationsRoutes } from './routes';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -9,12 +9,13 @@ const port = Number(process.env.PORT) || 3000;
 // 允许前端跨域访问（本地 Vite 联调时有用）
 app.use(cors());
 // 解析 JSON 请求体（后面写 /api/chat 会用到）
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 // 注册路由
 app.use(chatRoutes);
 app.use(ragRoutes);
 app.use(docsRoutes);
 app.use(modelsRoutes);
+app.use(conversationsRoutes);
 
 // 健康检查：用来确认服务已启动
 app.get('/health', (_req, res) => {

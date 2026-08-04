@@ -29,3 +29,16 @@ export type LlmModelItem = {
   ownedBy?: string;
   supportedEndpointTypes?: string[];
 };
+
+/** 对话列表项（不含 messages） */
+export type ConversationSummary = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** 完整对话（与 server conversations 对齐） */
+export type Conversation = ConversationSummary & {
+  messages: ChatMessage[];
+};

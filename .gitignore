@@ -5,3 +5,4 @@ node_modules/
 *.log
 dist/
 server/data/chunks.json
+server/data/conversations.json

@@ -202,9 +202,9 @@ import { NTooltip, type SelectOption } from 'naive-ui';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { isJSON } from '@/utils/obj';
 import { MarkdownView, DocPreviewModal } from '@/components';
-import type { ChatMessage, RagCitation, SystemPromptKey } from '@/types/chat';
+import type { ChatMessage, ConversationSummary, RagCitation, SystemPromptKey } from '@/types/chat';
 import { SYSTEM_PROMPT_CONTENT, SYSTEM_PROMPT_OPTIONS } from '@/constants/system-prompt';
-import { fetchModels } from '@/services';
+import { createConversation, fetchModels, updateConversation } from '@/services';
 import { getApiError } from '@/services/http';
 
 import AudioOutlined from '~icons/ant-design/audio-outlined';
@@ -216,6 +216,9 @@ import FileTextOutlined from '~icons/ant-design/file-text-outlined';
 
 const route = useRoute();
 const message = useMessage();
+const emit = defineEmits<{
+  (e: 'conversationUpdated', summary: ConversationSummary): void;
+}>();
 const docPreviewRef = ref<InstanceType<typeof DocPreviewModal>>();
 const props = withDefaults(
   defineProps<{
@@ -323,6 +326,9 @@ const recorder = ref(null); // 语音识别对象
 const audioContext = ref(null);
 const status = ref(''); //语音状态
 const chatId = ref('');
+/** 当前对话 id（后端 conversations） */
+const conversationId = ref('');
+const persisting = ref(false);
 
 const errorMsg = ref(null); // 错误信息
 const errorCount = ref(0); // 错误计数
@@ -461,6 +467,56 @@ function openCitationDoc(source: string) {
   docPreviewRef.value?.open(source);
 }
 
+/** 供左侧栏切换会话：绑定 conversationId，必要时中断进行中的流 */
+function setConversation(chat: ConversationSummary | null) {
+  if (isSending.value) {
+    stopGeneration();
+  }
+  conversationId.value = chat?.id || '';
+  pendingRetry.value = false;
+  newMessage.value = '';
+}
+
+/** 回填历史消息（切换 / 新建） */
+function loadMessages(list: ChatMessage[]) {
+  messages.value = Array.isArray(list) ? [...list] : [];
+  syncSystemMessage();
+  pendingRetry.value = false;
+  // newMessage.value = '';
+  nextTick(() => scrollToBottom());
+}
+
+/** 持久化当前 messages 到后端 JSON */
+async function persistConversation() {
+  if (persisting.value) return;
+  const hasUser = messages.value.some((m) => m.role === 'user' && m.content?.trim());
+  if (!hasUser) return;
+
+  persisting.value = true;
+  try {
+    if (!conversationId.value) {
+      const { data } = await createConversation();
+      conversationId.value = data.conversation.id;
+    }
+    const payload = messages.value;
+    const { data } = await updateConversation(conversationId.value, {
+      messages: payload,
+    });
+    const c = data.conversation;
+    emit('conversationUpdated', {
+      id: c.id,
+      title: c.title,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+    });
+  } catch (err) {
+    console.error(err);
+    message.error(getApiError(err, '保存对话失败'));
+  } finally {
+    persisting.value = false;
+  }
+}
+
 /** 流式结束收尾：保证只执行一次，避免 stop / onclose / onerror 互相打乱状态 */
 function finalizeStreamMsg(
   aiReturnMsg: ChatMessage | null,
@@ -496,6 +552,9 @@ function finalizeStreamMsg(
     pendingRetry.value = false;
     newMessage.value = '';
   }
+
+  // 成功或停止都落库；纯失败待重试也落库，便于刷新后看到失败态
+  void persistConversation();
 }
 
 async function sendMessage() {
@@ -912,6 +971,12 @@ onUnmounted(() => {
   }
   socket.value?.close();
   recorder.value?.stop();
+});
+
+defineExpose({
+  setConversation,
+  loadMessages,
+  persistConversation,
 });
 </script>
 <style lang="less" scoped>
