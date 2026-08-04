@@ -59,6 +59,14 @@ async function runRagSearch(query: string): Promise<{ text: string; hits: Citati
   return { text, hits };
 }
 
+/**
+ * Agent 流式对话（模型可选择调用 ragSearch）
+ * 「模型决策 → 可选执行工具 → 再生成回答」
+ * @param res Response 对象
+ * @param userMessages 用户消息
+ * @param model 模型名称
+ * @returns
+ */
 export async function agentStream(res: Response, userMessages: ChatMessage[], model?: string) {
   const client = getLlmClient();
   const modelName = resolveModel(model);
@@ -92,12 +100,23 @@ export async function agentStream(res: Response, userMessages: ChatMessage[], mo
     const delta = chunk.choices[0]?.delta;
     if (!delta) continue;
 
+    /**
+     * 第一轮流式响应：工具调用
+     * 如果模型返回工具调用，则将工具调用添加到工具调用Map中
+     * 并继续消费下一轮流式响应
+     */
     if (delta.tool_calls?.length) {
       sawToolCall = true;
       mergeToolCallDeltas(toolMap, delta.tool_calls);
       continue;
     }
 
+    /**
+     * 第一轮流式响应：模型返回回答
+     * 如果模型返回回答，并且还没有看到工具调用，则将回答添加到第一轮回答中
+     * 并流式返回给前端
+     * 如果模型返回回答，并且已经看到工具调用，则不流式返回给前端
+     */
     if (delta.content && !sawToolCall) {
       firstContent += delta.content;
       writeSse(res, { content: delta.content });
