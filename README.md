@@ -4,10 +4,13 @@
 
 当前已跑通：
 
-- **阶段 1**：Vue 聊天壳 + Express SSE 代理 DeepSeek（OpenAI 兼容）
-- **阶段 2 Week1**：手写最小 RAG（切分 → 本地 Embedding → JSON 索引 → 检索 → 带引用流式回答）
+- **阶段 1**：Vue 聊天壳 + Express SSE 代理 DeepSeek（OpenAI 兼容）；停止生成 / 重试 / System Prompt / 结构化输出练习
+- **阶段 2 Week1～3（主线）**：手写 RAG 闭环 + 文档生命周期 + 检索质量迭代
+  - Markdown 标题切分 → 本地 Embedding → `chunks.json`
+  - 简易 Hybrid 检索（向量 + 正文/文件名关键词）→ 低分拒答 → 带引用流式回答
+  - 知识库管理页（上传 / 删除 / 重建索引）+ 人工评测表与问题复盘
 
-学习计划见 [learn.md](./learn.md)；给 AI / 协作者的详细上下文见 [AGENTS.md](./AGENTS.md)。
+学习计划见 [learn.md](./learn.md)；架构上下文见 [AGENTS.md](./AGENTS.md)；踩坑复盘见 [项目中遇到的问题.md](./项目中遇到的问题.md)；评测题见 [rag-eval.md](./rag-eval.md)。
 
 ## 环境要求
 
@@ -32,16 +35,18 @@
 
 ```text
 learn-rag/
-  client/                 # 前端：Vue 3 + Vite + TypeScript
-  server/                 # 后端：Express + DeepSeek + RAG
+  client/                 # 前端：聊天 + 知识库管理页
+  server/                 # Express + DeepSeek + RAG
     src/
-      routes/             # chat / rag
-      services/           # deepseek、chunk、embedding、indexer
+      routes/             # chat / rag / docs / models
+      services/           # deepseek、chunk、embedding、indexer、docs
       utils/              # errors、SSE（含 citations）
     data/
       docs/               # 知识库 Markdown 源文件
-      chunks.json         # 构建出的向量索引（默认 gitignore）
+      chunks.json         # 向量索引（gitignore，需本地构建）
     scripts/              # build-index / test-*
+  rag-eval.md             # RAG 人工评测表
+  项目中遇到的问题.md      # 踩坑与优化复盘
   pnpm-workspace.yaml
   README.md
   learn.md
@@ -132,10 +137,15 @@ pnpm exec tsx scripts/build-index.ts
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/rag/stream` | **主路径**：检索 + 引用 + SSE 流式回答 |
+| POST | `/api/rag/stream` | **主路径**：Hybrid 检索 + 引用 + SSE |
+| POST | `/api/rag/reindex` | 重建 `chunks.json` |
+| GET/POST/DELETE | `/api/rag/docs` | 文档列表 / 上传 / 删除 |
 | POST | `/api/chat/stream` | 纯聊天 SSE（不检索） |
 | POST | `/api/chat/index` | 纯聊天非流式 |
+| GET | `/api/models` | 可选模型列表 |
 | GET | `/health` | 健康检查 |
+
+也可在前端 `http://localhost:1688/docs` 管理知识库并一键重建索引。
 
 ## 架构与数据流
 
@@ -145,55 +155,62 @@ pnpm exec tsx scripts/build-index.ts
 Chat.vue
   → POST /api/rag/stream（fetchEventSource）
   → Vite proxy → Express /api/rag/stream
-  → retrieve(Top-K) → 拼 RAG system prompt（低分则拒答）
-  → OpenAI SDK（stream:true）→ DeepSeek
-  → SSE：先 { citations }，再 { content } 增量 → 前端展示引用 + 正文
+  → retrieve(Top-K=5) → MIN_SCORE 过滤 → 拼 RAG system（低分/无命中则拒答）
+  → OpenAI SDK（stream:true）→ DeepSeek / 中转站
+  → SSE：{ content }* → { citations } → [DONE]
+  → 前端展示正文 + 引用卡片
 ```
 
-索引侧：
+索引与检索：
 
 ```text
-data/docs/*.md → chunk（字数窗口 + overlap）
-  → embed（本地 bge-small-zh）→ chunks.json
-  → 提问时 load + 余弦/点积 Top-K
+data/docs/*.md
+  → chunk（Markdown #/## 为主，过长再按 ### / 字数）
+  → embed（本地 bge；入库前去图片 URL 噪声）
+  → chunks.json
+提问时：
+  语义分（点积）+ 文件名加分 + 正文关键词加分 → Top-K → 阈值过滤
 ```
 
 前端要点：
 
-- 流式：`@microsoft/fetch-event-source` + `AbortController`（可停止生成）
-- 失败可一键重试上一句（不重复插入用户气泡）
+- 流式：`fetchEventSource` + `AbortController`（可停止生成）
+- 失败可一键重试上一句
 - 可选 System Prompt：简洁 / 详细 / 翻译 / 结构化
-- RAG 引用：消息气泡下展示 `source` / 片段 / `score`
+- RAG 引用：`source` / 片段 / `score`
+- `/docs`：上传、删除、重建索引
 
 后端要点：
 
 - 先读流第一块再写 SSE 头，尽量让鉴权错误以非 200 JSON 返回
-- RAG：`MIN_SCORE` 阈值过滤；无相关资料时约束模型拒答、不编造
-- 空流 / 流内 `error` 会转为明确错误文案给前端
+- `MIN_SCORE ≈ 0.45`；资料不足或未写明价格/官网/下载地址时禁止编造
+- 空流 / 流内 `error` 转为明确错误文案
 
 ## 学习进度（摘要）
 
 | 阶段 | 状态 |
 |------|------|
 | 0 定位 | 完成 |
-| 1 LLM 基础（流式 Chat） | 完成 |
-| 2 Week1 手写最小 RAG + 前端引用 | **主闭环已完成** |
-| 2 Week2+（上传/pgvector/评测表等） | 进行中 / 待做 |
+| 1 LLM 基础（流式 Chat / 停止 / 重试 / system / 结构化） | 完成 |
+| 2 Week1 手写最小 RAG + 前端引用 | 完成 |
+| 2 Week2 文档上传 / 删除 / 重建索引 + 管理页 | 完成（仍用 JSON，未上 pgvector） |
+| 2 Week3 标题切分 + Hybrid + 拒答 + 评测表 | **基本完成**（见 `rag-eval.md`） |
+| 2 Week4+ 会话持久化 / 权限 / pgvector | 未开始 |
 | 3 Agent | 未开始 |
 
-下一步建议：简易评测表（20 问）+ 失败案例记录；再做文档上传/重建索引或检索质量优化。详见 `learn.md`。
+下一步建议：引用点击跳转文档、会话与新后端打通，或评估是否上 pgvector。复盘见 `项目中遇到的问题.md`。
 
 ## 已知问题
 
-- **历史会话未接新后端**：`ChatRecord` 仍偏向旧 `/process/ai/*` 接口；左右栏会话切换与消息回填未完全打通。
-- **RAG Week2+ 未做**：尚无上传/删除 API、无 pgvector；索引靠脚本重建本地 JSON。
-- **缺正式评测记录**：还没有固定题集与引用准确率对比表。
-- **语音输入遗留**：`Chat.vue` 中录音 / WebSocket 相关逻辑未完成，可能不可用。
-- **部分网关“假成功”**：个别兼容网关在错误 Key 时仍返回 200 空流；后端会尽量识别为空内容错误。
+- **历史会话未接新后端**：`ChatRecord` 仍偏向旧 `/process/ai/*`；左右栏切换与消息回填未完全打通。
+- **无 pgvector**：索引仍是本地 `chunks.json`，体量大时需自行评估性能。
+- **引用跳转未做**：citations 可展示，尚未一键打开 `/docs` 对应文件定位。
+- **语音输入遗留**：`Chat.vue` 中录音 / WebSocket 相关逻辑未完成。
+- **部分网关“假成功”**：错误 Key 时偶发 200 空流；后端会尽量识别为空内容错误。
 - **改 `.env` 需重启 server**；根目录暂无统一 `dev` 一键脚本。
 
 ## 暂不使用（当前阶段）
 
 - Nuxt 作为主后端
 - Hono
-- 未完成 RAG 评测与工程化前不上 LangChain / Multi-Agent
+- 未进入阶段 3 前不上 LangChain / Multi-Agent

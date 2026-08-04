@@ -8,9 +8,9 @@
 ## 1. 项目定位
 
 - **仓库目标**：前端转 AI 应用工程师的学习与实践（LLM → RAG → Agent）。
-- **当前阶段**：阶段 0–1 完成；**阶段 2 Week1 手写最小 RAG 主闭环已跑通**（索引 → 检索 → 带引用流式回答）。下一步偏 Week2/质量与评测（上传、pgvector、评测表），暂不上 Agent 重框架。
-- **主作品方向**：知识库问答（Web），模型默认 DeepSeek（OpenAI 兼容协议）。
-- **学习路线**：见根目录 `learn.md`（分阶段路径，非运行时代码）。
+- **当前阶段**：阶段 0–1 完成；阶段 2 **Week1～3 主线基本完成**（手写 RAG + 文档生命周期 + 标题切分 / Hybrid 检索 / 拒答 / 人工评测）。下一步偏 Week4+（会话持久化、引用跳转、可选 pgvector），暂不上 Agent 重框架。
+- **主作品方向**：知识库问答（Web），Chat 走 DeepSeek（OpenAI 兼容 / 中转站）；Embedding 用本地 Transformers.js。
+- **学习路线**：见根目录 `learn.md`。踩坑复盘：`项目中遇到的问题.md`。评测题：`rag-eval.md`。
 
 ---
 
@@ -21,6 +21,8 @@ learn-rag/
 ├── AGENTS.md                 # 本文：给 AI / 协作者的架构上下文
 ├── README.md                 # 启动说明、技术栈、进度摘要
 ├── learn.md                  # 学习路线（阶段目标 / 验收）
+├── rag-eval.md               # RAG 人工评测表（含失败案例）
+├── 项目中遇到的问题.md        # 踩坑与优化复盘
 ├── pnpm-workspace.yaml       # client + server
 ├── .gitignore                # 忽略 docs/、.env、server/data/chunks.json 等
 ├── .cursor/rules/            # Cursor 规则（自动注入）
@@ -51,7 +53,7 @@ learn-rag/
     │   ├── docs/             # 知识库 Markdown 源
     │   └── chunks.json       # 构建产物（gitignore，需本地 build）
     └── src/
-        ├── index.ts          # 注册 chat + rag + models 路由，/health
+        ├── index.ts          # 注册 chat + rag + docs + models，/health
         ├── routes/
         │   ├── chat.ts       # /api/chat/index、/api/chat/stream
         │   ├── rag.ts        # /api/rag/stream、/api/rag/reindex
@@ -59,10 +61,10 @@ learn-rag/
         │   └── models.ts     # /api/models 可选模型列表
         ├── services/
         │   ├── deepseek.ts   # OpenAI SDK → DeepSeek（含 listModels）
-        │   ├── chunk.ts      # 固定字数切分 + overlap
+        │   ├── chunk.ts      # Markdown 标题切分（#/##，过长再 ###/字数）
         │   ├── embedding.ts  # 本地 Transformers.js
         │   ├── docs.ts       # 知识库源文件读写（与 Indexer 解耦）
-        │   └── indexer.ts    # build / save / load / retrieve
+        │   └── indexer.ts    # build / save / load / Hybrid retrieve
         ├── types/chunk.ts
         └── utils/            # errors、sse（含 writeSseCitations）
 ```
@@ -124,10 +126,14 @@ cd server && pnpm exec tsx scripts/build-index.ts
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/rag/stream` | **当前前端主路径**：retrieve → 拼 prompt → SSE；先发 `content`*，收尾再发 `citations` → `[DONE]`；可选 body.`model` |
+| POST | `/api/rag/stream` | **前端主路径**：Hybrid retrieve → 拼 prompt → SSE；`content`* → `citations` → `[DONE]`；可选 body.`model` |
+| POST | `/api/rag/reindex` | 重建 `data/chunks.json` |
+| GET | `/api/rag/docs` | 文档列表 |
+| POST | `/api/rag/docs` | 上传/保存文档（`name` + `content`） |
+| DELETE | `/api/rag/docs/:name` | 删除文档 |
 | POST | `/api/chat/stream` | 纯聊天 SSE（不检索）；可选 body.`model` |
 | POST | `/api/chat/index` | 纯聊天非流式；可选 body.`model` |
-| GET | `/api/models` | 可选模型列表（封装上游 `{DEEPSEEK_BASE_URL}/models`） |
+| GET | `/api/models` | 可选模型列表 |
 | GET | `/health` | 健康检查 |
 
 ### 5.2 RAG 主路径
@@ -135,19 +141,22 @@ cd server && pnpm exec tsx scripts/build-index.ts
 ```text
 Chat.vue
   → POST /api/rag/stream
-  → retrieve(question, topK=3)
-  → 若 topScore < MIN_SCORE(0.35) → 空引用 + 拒答约束
-  → 否则把 Top-K 片段写入 system「参考资料」
-  → chatCompletionStream(DeepSeek)
+  → retrieve(question, topK=5)
+  → 过滤 score < MIN_SCORE(0.45) → 无命中则拒答约束
+  → 否则把片段写入 system「参考资料」（并禁止瞎编价格/官网/下载地址）
+  → chatCompletionStream(DeepSeek / 中转站)
   → SSE: { content }* → { citations } → [DONE]
   → 前端气泡展示引用卡片（source / text / score）
 ```
 
-索引：
+索引与检索：
 
 ```text
-data/docs/*.md → chunkText → embedText → Indexer.save(chunks.json)
-提问时 Indexer.load → 问题向量 × chunk 向量点积排序 → Top-K
+data/docs/*.md
+  → chunkText（#/## 为主；过长再 ### 或字数窗口）
+  → embedText（去图片 URL 噪声）→ Indexer.save(chunks.json)
+提问时：
+  语义点积 + 文件名加分 + 正文关键词加分 → Top-K → MIN_SCORE 过滤
 ```
 
 ### 5.3 前端聊天模块
@@ -205,30 +214,47 @@ AiChat.vue
 
 ---
 
-## 9. 已知缺口 / 后续方向
+## 9. 学习进度（对照 learn.md）
+
+| 阶段 | 状态 | 说明 |
+|------|------|------|
+| 0 定位 | 完成 | — |
+| 1 LLM 基础 | 完成 | 流式 Chat、停止、重试、system、结构化输出 |
+| 2 Week1 手写 RAG | 完成 | 索引 → 检索 → 引用流式回答 |
+| 2 Week2 文档生命周期 | 完成 | docs API + `/docs` 管理页；存储仍为 JSON |
+| 2 Week3 检索质量 | **基本完成** | 标题切分、Hybrid、拒答、`rag-eval.md` |
+| 2 Week4+ | 未开始 | 会话持久化、权限、pgvector |
+| 3 Agent | 未开始 | — |
+
+## 10. 已知缺口 / 后续方向
 
 - [x] `server/` Express + DeepSeek SSE
 - [x] Vite 代理 `/api` → 后端
 - [x] 手写 RAG：chunk / embed / JSON 索引 / retrieve
 - [x] `/api/rag/stream` + 前端 citations 展示
-- [ ] 简易评测表（20 问）与失败案例记录
-- [x] 文档上传 / 重建索引 / 删除的 HTTP API + `docs-home` 管理页
+- [x] 文档上传 / 重建索引 / 删除 + `docs-home`
+- [x] Markdown 标题切分 + 简易 Hybrid（向量 + 关键词）
+- [x] 低分 / 无依据拒答；评测表与失败案例（`rag-eval.md`、`项目中遇到的问题.md`）
+- [ ] 引用点击跳转 `/docs` 对应文件
 - [ ] 中期向量库（pgvector 等）
-- [ ] 切分优化（标题层级）、Hybrid / Rerank（了解即可）
+- [ ] Rerank（可选了解）
 - [ ] `AiChat` 左右栏会话与新后端打通
 - [ ] 清理 `Chat.vue` 语音/WebSocket 遗留
-- [ ] Agent / Tool Calling（阶段 3，RAG 评测与工程化后再做）
+- [ ] Agent / Tool Calling（阶段 3）
 
 ---
 
-## 10. 提问时建议引用的文件
+## 11. 提问时建议引用的文件
 
 | 问题类型 | 优先打开 / @ 的文件 |
 |----------|---------------------|
 | 整体架构 / 约定 | `AGENTS.md`、`README.md` |
 | 学习进度 / 验收 | `learn.md` |
+| 踩坑 / 优化复盘 | `项目中遇到的问题.md` |
+| 评测题 | `rag-eval.md` |
 | RAG 路由 | `server/src/routes/rag.ts` |
 | 索引 / 检索 | `server/src/services/indexer.ts`、`chunk.ts`、`embedding.ts` |
+| 文档 CRUD | `server/src/routes/docs.ts`、`services/docs.ts`；前端 `views/docs-home/` |
 | SSE / 引用事件 | `server/src/utils/sse.ts` |
 | 纯聊天 | `server/src/routes/chat.ts`、`services/deepseek.ts` |
 | 聊天 UI / 流式 / 引用 | `client/src/views/ai-agent/components/Chat.vue` |
