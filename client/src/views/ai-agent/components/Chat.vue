@@ -75,7 +75,14 @@
                   :title="`${c.source}\n${c.text}`"
                 >
                   <div class="citation-index">{{ ci + 1 }}</div>
-                  <span class="citation-source">{{ c.source }}</span>
+                  <span
+                    class="citation-source"
+                    role="link"
+                    :title="`查看文档：${c.source}`"
+                    @click.stop="openCitationDoc(c.source)"
+                  >
+                    {{ c.source }}
+                  </span>
                   <span class="citation-text">{{ c.text }}</span>
                   <span class="citation-score">{{ c.score.toFixed(3) }}</span>
                 </div>
@@ -185,6 +192,7 @@
         </div>
       </div>
     </div>
+    <DocPreviewModal ref="docPreviewRef" />
   </div>
 </template>
 <script setup lang="ts">
@@ -193,7 +201,7 @@ import { useRoute } from 'vue-router';
 import { NTooltip, type SelectOption } from 'naive-ui';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { isJSON } from '@/utils/obj';
-import { MarkdownView } from '@/components';
+import { MarkdownView, DocPreviewModal } from '@/components';
 import type { ChatMessage, RagCitation, SystemPromptKey } from '@/types/chat';
 import { SYSTEM_PROMPT_CONTENT, SYSTEM_PROMPT_OPTIONS } from '@/constants/system-prompt';
 import { fetchModels } from '@/services';
@@ -208,6 +216,7 @@ import FileTextOutlined from '~icons/ant-design/file-text-outlined';
 
 const route = useRoute();
 const message = useMessage();
+const docPreviewRef = ref<InstanceType<typeof DocPreviewModal>>();
 const props = withDefaults(
   defineProps<{
     selectedBusiness?: any;
@@ -445,6 +454,11 @@ function resolveStreamErrorTip(err: unknown) {
     return '请求过于频繁，请稍后重试';
   }
   return raw ? `模型调用失败：${raw}` : '模型调用失败，请稍后重试';
+}
+
+/** 点击引用标题 → 在当前页弹窗预览文档 */
+function openCitationDoc(source: string) {
+  docPreviewRef.value?.open(source);
 }
 
 /** 流式结束收尾：保证只执行一次，避免 stop / onclose / onerror 互相打乱状态 */
@@ -1068,7 +1082,14 @@ onUnmounted(() => {
       white-space: nowrap;
       font-size: 12px;
       font-weight: 500;
-      color: #374151;
+      color: #2563f4;
+      cursor: pointer;
+      transition: color 0.15s;
+
+      &:hover {
+        color: #1d4ed8;
+        text-decoration: underline;
+      }
     }
     .citation-text {
       flex: 1;

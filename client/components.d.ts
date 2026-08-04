@@ -12,6 +12,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    DocPreviewModal: typeof import('./src/components/doc-preview-modal/src/DocPreviewModal.vue')['default']
     MarkdownView: typeof import('./src/components/markdown-view/src/MarkdownView.vue')['default']
     NAvatar: typeof import('naive-ui')['NAvatar']
     NButton: typeof import('naive-ui')['NButton']
@@ -42,6 +43,7 @@ declare module 'vue' {
 
 // For TSX support
 declare global {
+  const DocPreviewModal: typeof import('./src/components/doc-preview-modal/src/DocPreviewModal.vue')['default']
   const MarkdownView: typeof import('./src/components/markdown-view/src/MarkdownView.vue')['default']
   const NAvatar: typeof import('naive-ui')['NAvatar']
   const NButton: typeof import('naive-ui')['NButton']

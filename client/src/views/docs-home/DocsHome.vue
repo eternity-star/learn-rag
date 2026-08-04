@@ -116,35 +116,7 @@
       </template>
     </n-modal>
 
-    <n-modal
-      v-model:show="showPreview"
-      preset="card"
-      :title="previewName || '文档预览'"
-      :style="previewModalStyle"
-      :class="{ 'preview-modal--fullscreen': previewFullscreen }"
-      :bordered="false"
-      display-directive="if"
-      @after-leave="onPreviewLeave"
-    >
-      <template #header-extra>
-        <n-button
-          quaternary
-          circle
-          size="small"
-          :title="previewFullscreen ? '退出全屏' : '全屏查看'"
-          @click="previewFullscreen = !previewFullscreen"
-        >
-          <template #icon>
-            <n-icon :component="previewFullscreen ? CompressOutlined : ExpandOutlined" :size="18" />
-          </template>
-        </n-button>
-      </template>
-      <n-spin :show="previewLoading" class="preview-spin">
-        <n-scrollbar :style="previewScrollStyle">
-          <MarkdownView :content="previewContent" allow-html class="md-preview-wrap" />
-        </n-scrollbar>
-      </n-spin>
-    </n-modal>
+    <DocPreviewModal ref="docPreviewRef" />
   </div>
 </template>
 
@@ -153,13 +125,12 @@ import { NButton, NIcon, type DataTableColumns, type UploadCustomRequestOptions 
 import type { RagDocItem } from '@/types/docs';
 import {
   fetchDocs,
-  fetchDocContent,
   uploadDoc,
   removeDoc,
   reindexDocs,
 } from '@/services/api/docs-api';
 import { getApiError } from '@/services/http';
-import { MarkdownView } from '@/components';
+import { DocPreviewModal } from '@/components';
 import { useRouter } from 'vue-router';
 
 import MessageOutlined from '~icons/ant-design/message-outlined';
@@ -168,8 +139,6 @@ import PlusOutlined from '~icons/ant-design/plus-outlined';
 import UploadOutlined from '~icons/ant-design/upload-outlined';
 import DatabaseOutlined from '~icons/ant-design/database-outlined';
 import DeleteOutlined from '~icons/ant-design/delete-outlined';
-import ExpandOutlined from '~icons/ant-design/expand-outlined';
-import CompressOutlined from '~icons/ant-design/compress-outlined';
 import SearchOutlined from '~icons/ant-design/search-outlined';
 
 const router = useRouter();
@@ -203,34 +172,7 @@ const editingName = ref('');
 const formName = ref('');
 const formContent = ref('');
 
-const showPreview = ref(false);
-const previewLoading = ref(false);
-const previewName = ref('');
-const previewContent = ref('');
-const previewFullscreen = ref(false);
-
-const previewModalStyle = computed(() =>
-  previewFullscreen.value
-    ? {
-        width: '100vw',
-        maxWidth: '100vw',
-        height: '100vh',
-        margin: '0',
-        borderRadius: '0',
-      }
-    : {
-        width: '960px',
-        maxWidth: '94vw',
-      },
-);
-
-const previewScrollStyle = computed(() =>
-  previewFullscreen.value ? { height: 'calc(100vh - 72px)' } : { maxHeight: '70vh' },
-);
-
-function onPreviewLeave() {
-  previewFullscreen.value = false;
-}
+const docPreviewRef = ref<InstanceType<typeof DocPreviewModal>>();
 
 function formatSize(size: number) {
   if (size < 1024) return `${size} B`;
@@ -269,20 +211,8 @@ function openCreateModal() {
   showModal.value = true;
 }
 
-async function openPreview(row: RagDocItem) {
-  previewName.value = row.name;
-  previewContent.value = '';
-  showPreview.value = true;
-  previewLoading.value = true;
-  try {
-    const { data } = await fetchDocContent(row.name);
-    previewContent.value = data.content ?? '';
-  } catch (err) {
-    message.error(getApiError(err, '读取文档失败'));
-    showPreview.value = false;
-  } finally {
-    previewLoading.value = false;
-  }
+function openPreview(row: RagDocItem) {
+  docPreviewRef.value?.open(row.name);
 }
 
 function rowProps(row: RagDocItem) {
@@ -525,34 +455,4 @@ onMounted(() => {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.md-preview-wrap {
-  padding: 4px 2px 12px;
-}
-
-:deep(.preview-modal--fullscreen) {
-  .n-card {
-    height: 100vh;
-    max-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    border-radius: 0;
-  }
-
-  .n-card__content {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .preview-spin {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .n-spin-container,
-  .n-spin-content {
-    height: 100%;
-  }
-}
 </style>
