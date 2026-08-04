@@ -83,7 +83,22 @@ function extractQueryTokens(query: string): string[] {
   return [...new Set([...latin, ...extras])];
 }
 
-/** 抽问题里的中文/英文词，用于正文关键词加分（简易 hybrid） */
+/**
+ * 抽问题里的中文/英文词，用于正文关键词加分（简易 hybrid）
+ * @param query 查询语句
+ * @returns 关键词
+ *
+ * 1. 抽出引号内的词
+ * 2. 抽出中文词
+ * 3. 抽出英文词
+ * 4. 去重
+ * 5. 按长度排序
+ * 6. 返回关键词
+ *
+ * 示例：
+ * 查询语句：「配置仪器资源时要配哪」
+ * 返回关键词：[ "配置仪器资源", "配置仪器", "配置", "资源", "时要", "要配", "配哪" ]
+ */
 function extractTextTerms(query: string): string[] {
   const quoted = [...query.matchAll(/[「"']([^」"']{2,20})[」"']/g)].map((m) => m[1]!);
   const cjkRuns = query.match(/[\u4e00-\u9fff]{2,}/g) ?? [];
@@ -105,6 +120,12 @@ function extractTextTerms(query: string): string[] {
   return [...new Set([...cjk, ...latin])].sort((a, b) => b.length - a.length);
 }
 
+/**
+ * 文件名命中关键词则加分
+ * @param source 文件名
+ * @param tokens 关键词
+ * @returns 加分
+ */
 function calcSourceBoost(source: string, tokens: string[]): number {
   const s = source.toLowerCase();
   // 命中任意 keywords 就加分；多个命中可累加，设上限避免爆表
@@ -119,6 +140,9 @@ function calcSourceBoost(source: string, tokens: string[]): number {
 /**
  * 正文命中问题关键词则加分。
  * 解决：正确答案片段语义分偏低（约 0.47），被无关文档压过。
+ * @param chunkText 正文
+ * @param terms 关键词
+ * @returns 加分
  */
 function calcTextBoost(chunkText: string, terms: string[]): number {
   if (terms.length === 0) return 0;
@@ -167,6 +191,7 @@ export async function retrieve(query: string, topK: number = 5): Promise<Retriev
     const semantic = dot(questionEmbedding, chunk.embedding);
     const sourceBoost = calcSourceBoost(chunk.source, tokens);
     const textBoost = calcTextBoost(chunk.text, textTerms);
+    // semantic = 像不像 · sourceBoost = 文件名对不对题 · textBoost = 正文有没有原词 · score = 三者相加后的排序分
     const score = semantic + sourceBoost + textBoost;
     return {
       id: chunk.id,
