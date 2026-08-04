@@ -51,7 +51,6 @@
               ></div>
               <div
                 v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
-                v-viewer
                 class="message-content return-content return-markdown"
                 :class="{ 'is-error': msg.isError }"
               >
