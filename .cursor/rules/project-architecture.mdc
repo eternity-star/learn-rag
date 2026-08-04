@@ -12,9 +12,10 @@ alwaysApply: true
 - 单仓双端：`client/`（Vue3 + Vite + TS + Naive UI + UnoCSS）、`server/`（Express + TS）。
 - 前端开发端口 `1688`；Vite 代理 `/api` → `http://localhost:3000`。
 - 主聊天/RAG 走 **`/api/rag/stream`**（SSE，`fetchEventSource`）；知识库管理页在 `client/src/views/docs-home/`。
+- 会话走 **`/api/conversations/*`**（query/get 用 GET，create/update/delete 用 POST）；数据在 `server/data/conversations.json`。
 - UnoCSS 工具类前缀 **`lrx-`**（如 `lrx-p-0`），配置在 `client/uno.config.ts`。
 - 核心业务：`client/src/views/ai-agent/`（`AiChat` → `ChatRecord` + `Chat`）。
-- `docs/`、`server/data/chunks.json`、`.env` 被 gitignore，不要假设已入库。
+- `docs/`、`server/data/chunks.json`、`server/data/conversations.json`、`.env` 被 gitignore，不要假设已入库。
 
 ## 改代码时
 
