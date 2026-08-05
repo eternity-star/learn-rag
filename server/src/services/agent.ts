@@ -27,6 +27,62 @@ type RoundResult =
   | { kind: 'final'; hasContent: boolean }
   | { kind: 'tools'; toolCalls: FinalToolCall[]; assistantContent: string };
 
+/** 去掉模型泄漏到正文里的 DSML / 伪 tool_calls 标记 */
+function stripLeakedToolMarkup(text: string): string {
+  return (
+    text
+      // DeepSeek DSML 块（含你截图里的形式）
+      .replace(/<\|?DSML\|?tool_calls>[\s\S]*?<\/\|?DSML\|?tool_calls>/gi, '')
+      .replace(/<｜DSML｜tool_calls>[\s\S]*?<\/｜DSML｜tool_calls>/gi, '')
+      .replace(/<\|?DSML\|?invoke[\s\S]*?<\/\|?DSML\|?invoke>/gi, '')
+      .replace(/<｜DSML｜invoke[\s\S]*?<\/｜DSML｜invoke>/gi, '')
+      .replace(/<\|?DSML\|?parameter[\s\S]*?<\/\|?DSML\|?parameter>/gi, '')
+      .replace(/<｜DSML｜parameter[\s\S]*?<\/｜DSML｜parameter>/gi, '')
+      // 残留单标签
+      .replace(/<\/?\|?DSML\|?[^>]*>/gi, '')
+      .replace(/<\/?｜DSML｜[^>]*>/gi, '')
+      .replace(/tool_calls>/gi, '')
+      // 常见函数调用伪代码
+      .replace(/```(?:json|xml)?\s*\{[\s\S]*?"name"\s*:\s*"ragSearch"[\s\S]*?\}\s*```/gi, '')
+  );
+}
+
+/**
+ * 流式清洗：标签可能跨 chunk，先缓冲再吐「已稳定」的干净增量。
+ */
+class StreamContentSanitizer {
+  private raw = '';
+  private cleanEmittedLen = 0;
+  /** 喂入一小段，返回本次可安全推给前端的文本（可能为空） */
+  push(piece: string): string {
+    this.raw += piece;
+    // 末尾像未闭合标签时先不吐，等后续 chunk
+    if (this.hasIncompleteMarker(this.raw)) return '';
+    const clean = stripLeakedToolMarkup(this.raw);
+    if (clean.length <= this.cleanEmittedLen) return '';
+    const delta = clean.slice(this.cleanEmittedLen);
+    this.cleanEmittedLen = clean.length;
+    return delta;
+  }
+
+  /** 流结束时把剩余干净文本吐出 */
+  flush(): string {
+    const clean = stripLeakedToolMarkup(this.raw);
+    const delta = clean.slice(this.cleanEmittedLen);
+    this.raw = '';
+    this.cleanEmittedLen = 0;
+    return delta;
+  }
+
+  private hasIncompleteMarker(s: string): boolean {
+    // 普通 < 或 DeepSeek 全角分隔的 DSML 开头未闭合
+    if (/<\|?[^>\n]*$/.test(s)) return true;
+    if (/<｜[^｜\n]*$/.test(s)) return true;
+    if (/<｜DSML｜[^>]*$/.test(s)) return true;
+    return false;
+  }
+}
+
 /**
  * 工具列表
  * 目前只支持一个工具：ragSearch
@@ -158,11 +214,21 @@ async function consumeToolRound(
 
   // 工具调用Map，key为工具调用索引，value为工具调用对象
   const toolMap = new Map<number, ToolCallAcc & { arguments: string }>();
+  /** 流式清洗器 */
+  const sanitizer = new StreamContentSanitizer();
   let content = '';
   /** 是否看到工具调用 */
   let sawToolCall = false;
   /** 是否有内容 */
   let hasContent = false;
+
+  const emitContent = (piece: string) => {
+    if (!piece) return;
+    content += piece;
+    hasContent = true;
+    writeSse(res, { content: piece });
+    flushSse(res);
+  };
 
   for await (const chunk of stream) {
     const chunkError = getStreamChunkError(chunk);
@@ -186,10 +252,7 @@ async function consumeToolRound(
      * 如果模型返回回答，并且已经看到工具调用，则不流式返回给前端
      */
     if (delta.content && !sawToolCall) {
-      content += delta.content;
-      hasContent = true;
-      writeSse(res, { content: delta.content });
-      flushSse(res);
+      emitContent(sanitizer.push(delta.content));
     }
   }
 
@@ -293,6 +356,13 @@ export async function agentStream(res: Response, userMessages: ChatMessage[], mo
   // ---------- 达到上限：禁止再调工具，强制最终回答 ----------
   writeSse(res, { event: 'tool_limit', maxRounds: MAX_TOOL_ROUNDS });
   flushSse(res);
+
+  // 关键：明确禁止再调工具 / 禁止输出 DSML
+  messages.push({
+    role: 'user',
+    content:
+      '【系统约束】工具调用次数已达上限。禁止再调用任何工具；禁止输出 tool_calls、DSML、XML、函数调用或标签。请仅根据上文已有的工具结果，用简洁中文给出最终总结回答。',
+  });
   const finale = await consumeToolRound(res, client, modelName, messages, false);
   if (finale.kind !== 'final' || !finale.hasContent) {
     writeSseError(res, '已达工具调用上限，且模型未给出最终回答');
