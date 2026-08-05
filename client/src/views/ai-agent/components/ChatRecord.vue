@@ -121,6 +121,7 @@ async function handlerDelete(it: ConversationSummary) {
       emit('changeChat', null);
       emit('changeChatInfo', []);
     }
+    message.success('删除成功');
     await loadList();
   } catch (err) {
     message.error(getApiError(err, '删除失败'));

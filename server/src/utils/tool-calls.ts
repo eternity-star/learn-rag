@@ -1,6 +1,8 @@
 /**
  * tool_calls调用工具函数
  */
+
+/** 工具调用对象 */
 export type ToolCallAcc = {
   id?: string; // 工具调用ID
   name?: string; // 工具名称
