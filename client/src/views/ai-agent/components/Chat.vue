@@ -656,6 +656,13 @@ async function sendMessage() {
             aiReturnMsg.isMsgLoading = false;
             return;
           }
+          if (obj?.event === 'tool_error') {
+            aiReturnMsg.isRetrieving = false;
+            const toolName = typeof obj.name === 'string' ? obj.name : '工具';
+            const errText = typeof obj.error === 'string' ? obj.error : '执行失败';
+            message.warning(`${toolName} 失败：${errText}`);
+            return;
+          }
           if (obj?.event === 'tool_end') {
             aiReturnMsg.isRetrieving = false;
             if (!aiReturnMsg.content) {

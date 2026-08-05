@@ -167,20 +167,85 @@ function runListDocs(): string {
   return lines.join('\n');
 }
 
-/** 执行单个 tool_call，失败也返回字符串，避免打断 SSE */
-async function executeTool(t: FinalToolCall): Promise<{ text: string; hits?: Citation[] }> {
+type ToolExecOk = { ok: true; text: string; hits?: Citation[] };
+type ToolExecFail = { ok: false; text: string; error: string };
+type ToolExecResult = ToolExecOk | ToolExecFail;
+
+/** 单工具最长执行时间（毫秒） */
+const TOOL_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} 超时（>${ms}ms）`));
+    }, ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
+function safeParseArgs(
+  raw: string,
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  try {
+    const value = JSON.parse(raw || '{}') as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { ok: false, error: 'arguments 必须是 JSON 对象' };
+    }
+    return { ok: true, value: value as Record<string, unknown> };
+  } catch {
+    return { ok: false, error: `arguments 不是合法 JSON: ${raw.slice(0, 120)}` };
+  }
+}
+
+/** 给模型看的失败文案：明确失败，避免当成有效检索结果 */
+function formatToolFailure(name: string, reason: string): string {
+  return [
+    `【工具失败】${name}`,
+    `原因：${reason}`,
+    '请不要编造知识库内容；向用户说明暂时无法完成该工具调用，并给出可重试建议。',
+  ].join('\n');
+}
+
+/**
+ * 执行单个 tool_call。
+ * 任何失败都返回 ok:false + text，绝不向外抛（保证 Agent 循环与 SSE 可继续）。
+ */
+async function executeTool(t: FinalToolCall): Promise<ToolExecResult> {
   try {
     if (t.name === 'ragSearch') {
-      const args = JSON.parse(t.arguments || '{}') as { query?: string };
-      const out = await runRagSearch(String(args.query ?? '').trim());
-      return { text: out.text, hits: out.hits };
+      const parsed = safeParseArgs(t.arguments);
+      if (!parsed.ok) {
+        return { ok: false, error: parsed.error, text: formatToolFailure(t.name, parsed.error) };
+      }
+      const query = String(parsed.value.query ?? '').trim();
+      if (!query) {
+        const error = '缺少参数 query，或 query 为空';
+        return { ok: false, error, text: formatToolFailure(t.name, error) };
+      }
+
+      const out = await withTimeout(runRagSearch(query), TOOL_TIMEOUT_MS, 'ragSearch');
+      return { ok: true, text: out.text, hits: out.hits };
     }
+
     if (t.name === 'listDocs') {
-      return { text: runListDocs() };
+      const text = await withTimeout(Promise.resolve(runListDocs()), TOOL_TIMEOUT_MS, 'listDocs');
+      return { ok: true, text };
     }
-    return { text: `未知工具：${t.name}` };
+
+    const error = `未知工具：${t.name}`;
+    return { ok: false, error, text: formatToolFailure(t.name, error) };
   } catch (e) {
-    return { text: `工具调用失败：${e instanceof Error ? e.message : String(e)}` };
+    const error = e instanceof Error ? e.message : String(e);
+    return { ok: false, error, text: formatToolFailure(t.name, error) };
   }
 }
 
@@ -317,8 +382,19 @@ export async function agentStream(res: Response, userMessages: ChatMessage[], mo
     for (const t of toolCalls) {
       writeSse(res, { event: 'tool_start', name: t.name, round });
       flushSse(res);
+
       const out = await executeTool(t);
-      if (out.hits?.length) {
+
+      if (!out.ok) {
+        // 前端可提示失败；SSE 不断开
+        writeSse(res, {
+          event: 'tool_error',
+          name: t.name,
+          round,
+          error: out.error,
+        });
+        flushSse(res);
+      } else if (out.hits?.length) {
         // 多轮检索时合并引用（按 id 去重）
         const seen = new Set(allCitations.map((c) => c.id));
         for (const h of out.hits) {
@@ -328,12 +404,20 @@ export async function agentStream(res: Response, userMessages: ChatMessage[], mo
           }
         }
       }
+
+      // 成功/失败都回灌给模型（失败用 formatToolFailure 文案）
       messages.push({
         role: 'tool',
         tool_call_id: t.id,
         content: out.text,
       });
-      writeSse(res, { event: 'tool_end', name: t.name, round });
+
+      writeSse(res, {
+        event: 'tool_end',
+        name: t.name,
+        round,
+        ok: out.ok,
+      });
       flushSse(res);
     }
 
