@@ -9,6 +9,7 @@
   - 手写 RAG：标题切分 → 本地 Embedding → `chunks.json` → Hybrid 检索 → 拒答 → 带引用流式回答
   - 知识库管理页（上传 / 删除 / 重建索引）+ 引用预览 + 人工评测与复盘
   - **会话持久化**：后端 `conversations.json` + `/api/conversations/*`，左右栏新建 / 切换 / 删除已打通
+- **阶段 3（进行中）**：手写 Tool Calling Agent（`ragSearch` + `listDocs`）；前端默认走 **`/api/agent/stream`**；含超时、最大轮次、失败降级。经典 `/api/rag/stream` 仍保留作对比
 
 学习计划见 [learn.md](./learn.md)；架构上下文见 [AGENTS.md](./AGENTS.md)；踩坑复盘见 [项目中遇到的问题.md](./项目中遇到的问题.md)；评测题见 [rag-eval.md](./rag-eval.md)。
 
@@ -27,22 +28,24 @@
 | 后端 | Node.js + Express + TypeScript |
 | 模型 API | DeepSeek（OpenAI 兼容协议 / 中转站） |
 | Embedding | 本地 `@xenova/transformers`（默认 `Xenova/bge-small-zh-v1.5`） |
+| Agent | 手写 Tool Calling（非 LangChain）；工具：`ragSearch`、`listDocs` |
 | RAG 短期存储 | `server/data/chunks.json` |
 | 会话短期存储 | `server/data/conversations.json` |
 | RAG 中期向量库 | pgvector（或托管库，尚未接入） |
 | 包管理 | pnpm（workspace：`client` / `server`） |
+| 格式化 | Prettier（根目录 `pnpm format`） |
 
 ## 项目目录
 
 ```text
 learn-rag/
-  client/                 # 前端：聊天 + 知识库管理
-  server/                 # Express + DeepSeek + RAG + conversations
+  client/                 # 前端：聊天（默认 Agent）+ 知识库管理
+  server/                 # Express + DeepSeek + RAG + Agent + conversations
     src/
-      routes/             # chat / rag / docs / models / conversations
-      services/
-      types/              # chat / chunk / conversation 公共类型
-      utils/
+      routes/             # chat / rag / docs / models / conversations / agent
+      services/           # 含 agent.ts（工具循环）
+      types/
+      utils/              # sse / tool-calls / errors
     data/
       docs/               # 知识库 Markdown
       chunks.json         # 向量索引（gitignore）
@@ -111,8 +114,10 @@ pnpm dev
 # → http://localhost:1688
 ```
 
+根目录也可：`pnpm dev:server` / `pnpm dev:client`。
+
 前端 Vite 代理：`/api` → `http://localhost:3000`。  
-聊天页默认走 RAG 流式；知识库管理：`http://localhost:1688/docs`。
+聊天页默认走 **Agent** 流式；知识库管理：`http://localhost:1688/docs`。
 
 ### 构建 RAG 索引
 
@@ -127,7 +132,8 @@ pnpm exec tsx scripts/build-index.ts
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/rag/stream` | **主路径**：Hybrid 检索 + 引用 + SSE |
+| POST | `/api/agent/stream` | **主路径**：Tool Calling Agent SSE（`ragSearch` / `listDocs`） |
+| POST | `/api/rag/stream` | 经典强制检索 RAG + 引用 + SSE（备用） |
 | POST | `/api/rag/reindex` | 重建 `chunks.json` |
 | GET/POST/DELETE | `/api/rag/docs` | 文档列表 / 上传 / 删除 |
 | GET | `/api/rag/docs/:name` | 读取文档内容 |
@@ -147,27 +153,26 @@ pnpm exec tsx scripts/build-index.ts
 
 ```text
 Chat.vue
-  → POST /api/rag/stream（fetchEventSource）
-  → Vite proxy → Express
-  → retrieve(Top-K=5) → MIN_SCORE 过滤 → 拼 RAG system
-  → OpenAI SDK stream → DeepSeek / 中转站
-  → SSE：{ content }* → { citations } → [DONE]
-  → 前端正文 + 引用卡片（可预览文档）
+  → POST /api/agent/stream（fetchEventSource）
+  → Vite proxy → Express agentStream
+  → 模型可调 ragSearch / listDocs（最多 3 轮；单工具超时 20s）
+  → SSE：tool_* → { content }* → { citations }? → [DONE]
+  → 前端：检索态文案 + 正文 + 引用卡片
   → POST /api/conversations/update/:id 落库
 ```
 
-索引与检索：
+索引与检索（工具与经典 RAG 共用）：
 
 ```text
 data/docs/*.md
   → chunk（#/## 为主，过长再 ### / 字数）
   → embed（本地 bge）→ chunks.json
-提问：语义分 + 文件名/正文关键词加分 → Top-K → 阈值过滤
+提问：语义分 + 文件名/正文关键词加分 → Top-K
 ```
 
 前端要点：
 
-- 流式可停止；失败可重试上一句
+- 默认 Agent；流式可停止；失败可重试上一句
 - System Prompt：简洁 / 详细 / 翻译 / 结构化
 - 左侧历史：新建 / 切换 / 删除，走 conversations API
 - `/docs`：上传、删除、重建索引
@@ -182,19 +187,21 @@ data/docs/*.md
 | 2 Week2 文档生命周期 + 管理页 | 完成（JSON，未上 pgvector） |
 | 2 Week3 标题切分 + Hybrid + 拒答 + 评测 | 完成 |
 | 2 Week4 会话持久化（conversations JSON） | **完成** |
-| 3 Agent | 未开始 |
+| 3 Agent Week1–2（双工具 + 超时/轮次/降级） | **基本完成** |
+| 3 Agent Week3+（确认流、完整工具轨迹 UI） | 未齐 |
 
-下一步可选：pgvector（向量 + 对话表）、权限、或进入阶段 3 Tool Calling。复盘见 `项目中遇到的问题.md`。
+下一步可选：统一 Agent / 经典 RAG 拒答策略、完善工具 UI、pgvector，或按 `learn.md` 补人机确认。复盘见 `项目中遇到的问题.md`。
 
 ## 已知问题
 
 - **无 pgvector**：索引与会话仍是本地 JSON，体量大时需自行评估性能。
+- **Agent vs 经典 RAG**：Agent 的 `ragSearch` 未走 `MIN_SCORE` 拒答；防瞎编 system 约束也未完全对齐。
 - **语音输入遗留**：`Chat.vue` 中录音 / WebSocket 相关逻辑未完成。
 - **部分网关“假成功”**：错误 Key 时偶发 200 空流；后端会尽量识别为空内容错误。
-- **改 `.env` 需重启 server**；根目录暂无统一 `dev` 一键脚本。
+- **改 `.env` 需重启 server**；根目录暂无统一 `dev` 一键脚本（有 `dev:client` / `dev:server`）。
 
 ## 暂不使用（当前阶段）
 
 - Nuxt 作为主后端
 - Hono
-- 未进入阶段 3 前不上 LangChain / Multi-Agent
+- 未手写通 Agent 前不上 LangChain / Multi-Agent 重框架
