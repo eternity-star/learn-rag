@@ -30,66 +30,101 @@
                 <n-icon :component="UserOutlined" />
               </n-avatar>
             </div>
-            <div
-              v-if="msg.isMsgLoading || msg.isRetrieving"
-              class="return-message-body return-message-loading"
-            >
-              <span class="mr5">{{ msg.isRetrieving ? '正在检索知识库…' : '回答中' }}</span>
-              <div class="loading-dots">
-                <span class="dot"></span>
-                <span class="dot"></span>
-                <span class="dot"></span>
+            <div class="return-message-body">
+              <!-- Agent 工具调用轨迹 -->
+              <div v-if="msg.toolSteps?.length" class="tool-trajectory">
+                <div
+                  v-for="(step, si) in msg.toolSteps"
+                  :key="si"
+                  class="tool-step"
+                  :class="`tool-step--${step.status}`"
+                >
+                  <n-icon :component="getToolIcon(step.name)" :size="14" />
+                  <span class="tool-step-name">{{ formatToolName(step.name) }}</span>
+                  <span v-if="step.args?.query" class="tool-step-args"
+                    >"{{ step.args.query }}"</span
+                  >
+                  <span v-if="step.status === 'running'" class="tool-step-status running">
+                    <span class="tool-step-spinner"></span>
+                    执行中...
+                  </span>
+                  <n-icon
+                    v-else-if="step.status === 'ok'"
+                    :component="CheckCircleOutlined"
+                    :size="14"
+                    class="tool-step-icon ok"
+                  />
+                  <n-icon
+                    v-else-if="step.status === 'error'"
+                    :component="CloseCircleOutlined"
+                    :size="14"
+                    class="tool-step-icon error"
+                  />
+                  <span v-if="step.result && step.status !== 'running'" class="tool-step-result">{{
+                    step.result
+                  }}</span>
+                </div>
               </div>
-            </div>
-            <div v-else class="return-message-body">
-              <div
-                v-if="msg.isStream == 1 && parseFormat == 'html'"
-                v-html="formatLinks(msg.content)"
-                v-viewer
-                class="message-content return-content"
-                :class="{ 'is-error': msg.isError }"
-              ></div>
-              <div
-                v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
-                class="message-content return-content return-markdown"
-                :class="{ 'is-error': msg.isError }"
-              >
-                <MarkdownView :content="msg.content" />
+              <!-- 加载态 -->
+              <div v-if="msg.isMsgLoading || msg.isRetrieving" class="return-message-loading">
+                <span class="mr5">{{ msg.isRetrieving ? '正在检索知识库…' : '回答中' }}</span>
+                <div class="loading-dots">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </div>
               </div>
-              <div
-                v-else-if="msg.isStream == 0"
-                class="message-content return-content"
-                :class="{ 'is-error': msg.isError }"
-              >
-                {{ msg.content }}
-              </div>
-              <!-- 流式过程中可能已收到 citations，等本条回答收尾（有 time）再展示 -->
-              <div v-if="msg.citations?.length && msg.time" class="citations">
-                <div class="citations-title">
-                  <n-icon :component="FileTextOutlined" :size="14" />
-                  <span>参考来源</span>
-                  <span class="citations-count">{{ msg.citations.length }}</span>
+              <!-- 正文 -->
+              <template v-if="!msg.isMsgLoading && !msg.isRetrieving">
+                <div
+                  v-if="msg.isStream == 1 && parseFormat == 'html'"
+                  v-html="formatLinks(msg.content)"
+                  v-viewer
+                  class="message-content return-content"
+                  :class="{ 'is-error': msg.isError }"
+                ></div>
+                <div
+                  v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
+                  class="message-content return-content return-markdown"
+                  :class="{ 'is-error': msg.isError }"
+                >
+                  <MarkdownView :content="msg.content" />
                 </div>
                 <div
-                  v-for="(c, ci) in msg.citations"
-                  :key="c.id"
-                  class="citation-item"
-                  :title="`${c.source}\n${c.text}`"
+                  v-else-if="msg.isStream == 0"
+                  class="message-content return-content"
+                  :class="{ 'is-error': msg.isError }"
                 >
-                  <div class="citation-index">{{ ci + 1 }}</div>
-                  <span
-                    class="citation-source"
-                    role="link"
-                    :title="`查看文档：${c.source}`"
-                    @click.stop="openCitationDoc(c.source)"
-                  >
-                    {{ c.source }}
-                  </span>
-                  <span class="citation-text">{{ c.text }}</span>
-                  <span class="citation-score">{{ c.score.toFixed(3) }}</span>
+                  {{ msg.content }}
                 </div>
-              </div>
-              <div class="message-time">{{ msg.time }}</div>
+                <!-- 流式过程中可能已收到 citations，等本条回答收尾（有 time）再展示 -->
+                <div v-if="msg.citations?.length && msg.time" class="citations">
+                  <div class="citations-title">
+                    <n-icon :component="FileTextOutlined" :size="14" />
+                    <span>参考来源</span>
+                    <span class="citations-count">{{ msg.citations.length }}</span>
+                  </div>
+                  <div
+                    v-for="(c, ci) in msg.citations"
+                    :key="c.id"
+                    class="citation-item"
+                    :title="`${c.source}\n${c.text}`"
+                  >
+                    <div class="citation-index">{{ ci + 1 }}</div>
+                    <span
+                      class="citation-source"
+                      role="link"
+                      :title="`查看文档：${c.source}`"
+                      @click.stop="openCitationDoc(c.source)"
+                    >
+                      {{ c.source }}
+                    </span>
+                    <span class="citation-text">{{ c.text }}</span>
+                    <span class="citation-score">{{ c.score.toFixed(3) }}</span>
+                  </div>
+                </div>
+                <div class="message-time">{{ msg.time }}</div>
+              </template>
             </div>
           </div>
         </div>
@@ -158,7 +193,6 @@
             />
           </div>
           <div class="toolbar-right">
-
             <button
               v-if="isSending"
               type="button"
@@ -202,6 +236,11 @@ import ArrowUpOutlined from '~icons/ant-design/arrow-up-outlined';
 import PauseCircleOutlined from '~icons/ant-design/pause-circle-outlined';
 import UserOutlined from '~icons/ant-design/user-outlined';
 import FileTextOutlined from '~icons/ant-design/file-text-outlined';
+import CheckCircleOutlined from '~icons/ant-design/check-circle-outlined';
+import CloseCircleOutlined from '~icons/ant-design/close-circle-outlined';
+import SearchOutlined from '~icons/ant-design/search-outlined';
+import UnorderedListOutlined from '~icons/ant-design/unordered-list-outlined';
+import WarningOutlined from '~icons/ant-design/warning-outlined';
 
 const route = useRoute();
 const message = useMessage();
@@ -449,6 +488,21 @@ function openCitationDoc(source: string) {
   docPreviewRef.value?.open(source);
 }
 
+/** 根据工具名返回对应图标 */
+function getToolIcon(name: string) {
+  if (name === 'ragSearch') return SearchOutlined;
+  if (name === 'listDocs') return UnorderedListOutlined;
+  return WarningOutlined;
+}
+
+/** 工具名转中文 */
+function formatToolName(name: string) {
+  if (name === 'ragSearch') return '知识库检索';
+  if (name === 'listDocs') return '文档列表';
+  if (name === 'tool_limit') return '轮次上限';
+  return name;
+}
+
 /** 供左侧栏切换会话：绑定 conversationId，必要时中断进行中的流 */
 function setConversation(chat: ConversationSummary | null) {
   if (isSending.value) {
@@ -581,6 +635,14 @@ async function sendMessage() {
     isRetrieving: false,
     isError: false,
     citations: [] as RagCitation[],
+    toolSteps: [] as Array<{
+      round: number;
+      name: string;
+      status: 'running' | 'ok' | 'error';
+      args?: Record<string, string>;
+      result?: string;
+      error?: string;
+    }>,
   });
   currentStreamMsg.value = aiReturnMsg;
   // 非json则正常返回渲染
@@ -628,11 +690,24 @@ async function sendMessage() {
           obj = isJSON(obj) ? JSON.parse(obj) : obj;
 
           if (obj?.event === 'tool_start') {
+            aiReturnMsg.toolSteps.push({
+              round: typeof obj.round === 'number' ? obj.round : 0,
+              name: typeof obj.name === 'string' ? obj.name : 'unknown',
+              status: 'running',
+              args: obj.args as Record<string, string> | undefined,
+            });
             aiReturnMsg.isRetrieving = true;
             aiReturnMsg.isMsgLoading = false;
             return;
           }
           if (obj?.event === 'tool_error') {
+            const target = aiReturnMsg.toolSteps.find(
+              (s) => s.round === obj.round && s.name === obj.name && s.status === 'running',
+            );
+            if (target) {
+              target.status = 'error';
+              target.error = typeof obj.error === 'string' ? obj.error : '执行失败';
+            }
             aiReturnMsg.isRetrieving = false;
             const toolName = typeof obj.name === 'string' ? obj.name : '工具';
             const errText = typeof obj.error === 'string' ? obj.error : '执行失败';
@@ -640,6 +715,27 @@ async function sendMessage() {
             return;
           }
           if (obj?.event === 'tool_end') {
+            const target = aiReturnMsg.toolSteps.find(
+              (s) => s.round === obj.round && s.name === obj.name && s.status === 'running',
+            );
+            if (target) {
+              target.status = obj.ok ? 'ok' : 'error';
+              target.result = typeof obj.result === 'string' ? obj.result : undefined;
+            }
+            aiReturnMsg.isRetrieving = false;
+            if (!aiReturnMsg.content) {
+              aiReturnMsg.isMsgLoading = true;
+            }
+            return;
+          }
+
+          if (obj?.event === 'tool_limit') {
+            aiReturnMsg.toolSteps.push({
+              round: -1,
+              name: 'tool_limit',
+              status: 'error',
+              result: `已超过最大工具调用轮次(${obj.maxRounds ?? '?'})`,
+            });
             aiReturnMsg.isRetrieving = false;
             if (!aiReturnMsg.content) {
               aiReturnMsg.isMsgLoading = true;
@@ -1206,7 +1302,6 @@ defineExpose({
       width: 120px;
     }
 
-
     .send-btn {
       display: inline-flex;
       align-items: center;
@@ -1355,5 +1450,72 @@ defineExpose({
   50% {
     opacity: 0;
   }
+}
+
+/* Agent 工具调用轨迹 */
+.tool-trajectory {
+  margin-bottom: 10px;
+}
+.tool-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  margin-right: 6px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid #e8ecf1;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 20px;
+}
+.tool-step--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+.tool-step-name {
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+.tool-step-args {
+  color: #6366f1;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-step-status.running {
+  color: #2563f4;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tool-step-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #bfdbfe;
+  border-top-color: #2563f4;
+  border-radius: 50%;
+  animation: tool-spin 0.6s linear infinite;
+}
+@keyframes tool-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.tool-step-icon.ok {
+  color: #16a34a;
+}
+.tool-step-icon.error {
+  color: #dc2626;
+}
+.tool-step-result {
+  color: #6b7280;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

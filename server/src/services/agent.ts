@@ -380,7 +380,14 @@ export async function agentStream(res: Response, userMessages: ChatMessage[], mo
     });
 
     for (const t of toolCalls) {
-      writeSse(res, { event: 'tool_start', name: t.name, round });
+      let args: Record<string, string> = {};
+      try {
+        const parsed = JSON.parse(t.arguments || '{}');
+        if (t.name === 'ragSearch' && parsed.query) {
+          args = { query: String(parsed.query) };
+        }
+      } catch { /* ignore */ }
+      writeSse(res, { event: 'tool_start', name: t.name, round, args });
       flushSse(res);
 
       const out = await executeTool(t);
@@ -417,6 +424,15 @@ export async function agentStream(res: Response, userMessages: ChatMessage[], mo
         name: t.name,
         round,
         ok: out.ok,
+        result: (() => {
+          if (!out.ok) return out.error;
+          if (t.name === 'ragSearch') {
+            const hitCount = out.hits?.length ?? 0;
+            return hitCount > 0 ? `检索到 ${hitCount} 个片段` : '未检索到相关片段';
+          }
+          if (t.name === 'listDocs') return '文档列表已获取';
+          return '执行完成';
+        })(),
       });
       flushSse(res);
     }

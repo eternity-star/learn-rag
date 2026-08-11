@@ -1,6 +1,16 @@
 /** 消息角色 */
 export type ChatRole = 'system' | 'user' | 'assistant';
 
+/** Agent 工具调用步骤 */
+export type ToolStep = {
+  round: number;
+  name: string;
+  status: 'running' | 'ok' | 'error';
+  args?: Record<string, string>;
+  result?: string;
+  error?: string;
+};
+
 export type ChatMessage = {
   role: ChatRole; // 消息角色
   content: string; // 消息内容
@@ -10,6 +20,7 @@ export type ChatMessage = {
   isRetrieving?: boolean; // Agent 工具检索中（tool_start → tool_end / 首字 content）
   isError?: boolean; // 消息是否错误
   citations?: RagCitation[]; // 引用资料
+  toolSteps?: ToolStep[]; // Agent 工具调用轨迹
 };
 
 /** System Prompt 选项 key；null 表示不使用 */
