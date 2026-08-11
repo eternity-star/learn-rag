@@ -158,18 +158,7 @@
             />
           </div>
           <div class="toolbar-right">
-            <button
-              type="button"
-              class="tool-btn"
-              :class="{
-                recording: isRecording,
-                'is-disabled': !isAllowInput,
-              }"
-              :disabled="!isAllowInput"
-              @click.stop="toggleRecording"
-            >
-              <n-icon :component="isRecording ? AudioFilled : AudioOutlined" :size="22" />
-            </button>
+
             <button
               v-if="isSending"
               type="button"
@@ -209,8 +198,6 @@ import { SYSTEM_PROMPT_CONTENT, SYSTEM_PROMPT_OPTIONS } from '@/constants/system
 import { createConversation, fetchModels, updateConversation } from '@/services';
 import { getApiError } from '@/services/http';
 
-import AudioOutlined from '~icons/ant-design/audio-outlined';
-import AudioFilled from '~icons/ant-design/audio-filled';
 import ArrowUpOutlined from '~icons/ant-design/arrow-up-outlined';
 import PauseCircleOutlined from '~icons/ant-design/pause-circle-outlined';
 import UserOutlined from '~icons/ant-design/user-outlined';
@@ -320,13 +307,6 @@ function syncSystemMessage() {
   }
 }
 const userInfoMap = ref({}); // 用户数据
-const isRecording = ref(false); //是否在语音识别文字中
-const oldMessage = ref(''); // 旧消息
-const transcript = ref(''); //语音识别后的文本
-const socket = ref(null); // WebSocket连接
-const recorder = ref(null); // 语音识别对象
-const audioContext = ref(null);
-const status = ref(''); //语音状态
 const chatId = ref('');
 /** 当前对话 id（后端 conversations） */
 const conversationId = ref('');
@@ -563,10 +543,6 @@ function finalizeStreamMsg(
 async function sendMessage() {
   if (!isAllowSend.value) return;
 
-  if (isRecording.value) {
-    await stopRecording();
-  }
-
   const inputText = newMessage.value?.trim?.() || '';
   const lastUserContent = getLastUserContent();
   // 失败后点发送：同一句则重试，不重复插用户气泡
@@ -719,10 +695,6 @@ async function sendMessage() {
         finalizeStreamMsg(aiReturnMsg, { aborted: true });
         return;
       }
-      // json则全部返回后处理渲染
-      if (selectedBusiness.value?.isStream == 0) {
-        handlerJsonObj(aiReturnMsg);
-      }
       finalizeStreamMsg(aiReturnMsg);
     },
     // 处理报错信息
@@ -762,96 +734,6 @@ function stopGeneration() {
   controller.value?.abort?.();
 }
 
-//中断请求
-function abortFetch() {
-  console.log('[ "中断请求" ] >', '中断请求');
-  controller.value?.abort?.(); //中断请求
-}
-// 点击录音按钮
-async function toggleRecording() {
-  if (!isAllowInput.value) return;
-  if (isRecording.value) {
-    await stopRecording();
-  } else {
-    await startRecording();
-  }
-}
-function initWebSocket() {
-  socket.value = new WebSocket('wss://emr-tl.cnhis.com/audio/socket');
-  socket.value.onopen = () => {
-    console.log('[ "连接成功，点击开始说话" ] >', '连接成功，点击开始说话');
-  };
-  socket.value.onmessage = (event) => {
-    const response = JSON.parse(event.data);
-    if (response.code === 0) {
-      transcript.value = response.data.text;
-      newMessage.value = oldMessage.value + transcript.value;
-    }
-  };
-  socket.value.onerror = (error) => {
-    console.error('WebSocket error:', '连接异常，请刷新重试', error);
-  };
-  socket.value.onclose = (error) => {
-    console.error('WebSocket error:', '连接关闭', error);
-  };
-}
-// 开始录音
-async function startRecording() {
-  try {
-    // 新增权限状态检查
-    const permission = await navigator.permissions.query({
-      name: 'microphone',
-    });
-    if (permission.state === 'denied') {
-      status.value = '麦克风权限被拒绝，请前往浏览器设置开启';
-      message.error(status.value);
-      return;
-    }
-
-    oldMessage.value = newMessage.value;
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-    });
-    if (!socket.value) initWebSocket();
-    audioContext.value = new (window.AudioContext || window.webkitAudioContext)();
-    recorder.value = new Recorder(audioContext.value, {
-      sampleRate: 16000,
-      bitRate: 16,
-      numChannels: 1,
-    });
-    recorder.value.init(stream);
-    recorder.value.start();
-    const audioRecorder = recorder.value.audioRecorder;
-    const _this = this;
-    // 每500ms发送一次音频数据
-    interval.value = setInterval(() => {
-      if (audioRecorder) {
-        audioRecorder.getBuffer((buffer) => {
-          audioRecorder.exportWAV((blob) => {
-            socket.value.send(blob);
-          });
-        });
-      }
-    }, 500);
-    isRecording.value = true;
-    status.value = '识别中...';
-  } catch (err) {
-    handleError(err);
-  }
-}
-// 结束录音
-async function stopRecording() {
-  clearInterval(interval.value);
-  recorder.value?.stop();
-  isRecording.value = false;
-  status.value = '点击开始说话';
-}
-function handleError(err) {
-  console.error('录音错误:', err);
-  status.value = err.name === 'NotAllowedError' ? '请允许麦克风权限' : '设备不支持录音';
-  message.error(status.value);
-  isRecording.value = false;
-}
 // 滚动到最底部
 function scrollToBottom() {
   nextTick(() => {
@@ -995,8 +877,6 @@ onUnmounted(() => {
   if (controller.value) {
     controller.value.abort();
   }
-  socket.value?.close();
-  recorder.value?.stop();
 });
 
 defineExpose({
@@ -1326,37 +1206,6 @@ defineExpose({
       width: 120px;
     }
 
-    .tool-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      padding: 0;
-      border: none;
-      border-radius: 8px;
-      background: transparent;
-      color: #4b5563;
-      cursor: pointer;
-      transition:
-        background-color 0.2s,
-        color 0.2s;
-
-      &:hover:not(.is-disabled) {
-        background: #f3f4f6;
-        color: #2563f4;
-      }
-
-      &.recording {
-        color: #2563f4;
-        animation: pulse 1.5s infinite;
-      }
-
-      &.is-disabled {
-        color: #c4c8ce;
-        cursor: not-allowed;
-      }
-    }
 
     .send-btn {
       display: inline-flex;
