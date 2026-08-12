@@ -1,134 +1,147 @@
 <template>
   <div class="ai-agent-self">
-    <!-- 新增消息展示区域 -->
-    <div class="message-list" ref="messageContainer">
-      <template v-for="(msg, index) in messages" :key="index">
-        <div
-          v-if="msg.role !== 'system'"
-          class="message-bubble"
-          :class="{
-            'user-message': msg.role === 'user',
-            'return-message': msg.role === 'assistant',
-          }"
-        >
-          <div v-if="msg.role === 'user'" class="message-content user-message-content">
-            <div class="user-message-row">
-              <div class="user-message-text" v-html="msg.content"></div>
+    <!-- 新增消息展示区域：按钮必须在滚动容器外，否则 absolute 会贴到内容底部随上滑消失 -->
+    <div class="message-list-wrap">
+      <div class="message-list" ref="messageContainer" @scroll="onMessageScroll">
+        <template v-for="(msg, index) in messages" :key="index">
+          <div
+            v-if="msg.role !== 'system'"
+            class="message-bubble"
+            :class="{
+              'user-message': msg.role === 'user',
+              'return-message': msg.role === 'assistant',
+            }"
+          >
+            <div v-if="msg.role === 'user'" class="message-content user-message-content">
+              <div class="user-message-row">
+                <div class="user-message-text" v-html="msg.content"></div>
+                <div class="author-photo">
+                  <img v-if="userInfoMap && userInfoMap.headUrl" :src="userInfoMap.headUrl" alt="" />
+                  <n-avatar v-else size="large">
+                    <n-icon :component="UserOutlined" />
+                  </n-avatar>
+                </div>
+              </div>
+              <div class="message-time">{{ msg.time }}</div>
+            </div>
+            <div v-else class="return-message-row">
               <div class="author-photo">
-                <img v-if="userInfoMap && userInfoMap.headUrl" :src="userInfoMap.headUrl" alt="" />
+                <img v-if="aiLogo" :src="aiLogo" alt="" />
                 <n-avatar v-else size="large">
                   <n-icon :component="UserOutlined" />
                 </n-avatar>
               </div>
-            </div>
-            <div class="message-time">{{ msg.time }}</div>
-          </div>
-          <div v-else class="return-message-row">
-            <div class="author-photo">
-              <img v-if="aiLogo" :src="aiLogo" alt="" />
-              <n-avatar v-else size="large">
-                <n-icon :component="UserOutlined" />
-              </n-avatar>
-            </div>
-            <div class="return-message-body">
-              <!-- Agent 工具调用轨迹 -->
-              <div v-if="msg.toolSteps?.length" class="tool-trajectory">
-                <div
-                  v-for="(step, si) in msg.toolSteps"
-                  :key="si"
-                  class="tool-step"
-                  :class="`tool-step--${step.status}`"
-                >
-                  <n-icon :component="getToolIcon(step.name)" :size="14" />
-                  <span class="tool-step-name">{{ formatToolName(step.name) }}</span>
-                  <span v-if="step.args?.query" class="tool-step-args"
-                    >"{{ step.args.query }}"</span
+              <div class="return-message-body">
+                <!-- Agent 工具调用轨迹 -->
+                <div v-if="msg.toolSteps?.length" class="tool-trajectory">
+                  <div
+                    v-for="(step, si) in msg.toolSteps"
+                    :key="si"
+                    class="tool-step"
+                    :class="`tool-step--${step.status}`"
                   >
-                  <span v-if="step.status === 'running'" class="tool-step-status running">
-                    <span class="tool-step-spinner"></span>
-                    执行中...
-                  </span>
-                  <n-icon
-                    v-else-if="step.status === 'ok'"
-                    :component="CheckCircleOutlined"
-                    :size="14"
-                    class="tool-step-icon ok"
-                  />
-                  <n-icon
-                    v-else-if="step.status === 'error'"
-                    :component="CloseCircleOutlined"
-                    :size="14"
-                    class="tool-step-icon error"
-                  />
-                  <span v-if="step.result && step.status !== 'running'" class="tool-step-result">{{
-                    step.result
-                  }}</span>
+                    <n-icon :component="getToolIcon(step.name)" :size="14" />
+                    <span class="tool-step-name">{{ formatToolName(step.name) }}</span>
+                    <span v-if="step.args?.query" class="tool-step-args"
+                      >"{{ step.args.query }}"</span
+                    >
+                    <span v-if="step.status === 'running'" class="tool-step-status running">
+                      <span class="tool-step-spinner"></span>
+                      执行中...
+                    </span>
+                    <n-icon
+                      v-else-if="step.status === 'ok'"
+                      :component="CheckCircleOutlined"
+                      :size="14"
+                      class="tool-step-icon ok"
+                    />
+                    <n-icon
+                      v-else-if="step.status === 'error'"
+                      :component="CloseCircleOutlined"
+                      :size="14"
+                      class="tool-step-icon error"
+                    />
+                    <span v-if="step.result && step.status !== 'running'" class="tool-step-result">{{
+                      step.result
+                    }}</span>
+                  </div>
                 </div>
-              </div>
-              <!-- 加载态 -->
-              <div v-if="msg.isMsgLoading || msg.isRetrieving" class="return-message-loading">
-                <span class="mr5">{{ msg.isRetrieving ? '正在检索知识库…' : '回答中' }}</span>
-                <div class="loading-dots">
-                  <span class="dot"></span>
-                  <span class="dot"></span>
-                  <span class="dot"></span>
+                <!-- 加载态 -->
+                <div v-if="msg.isMsgLoading || msg.isRetrieving" class="return-message-loading">
+                  <span class="mr5">{{ msg.isRetrieving ? '正在检索知识库…' : '回答中' }}</span>
+                  <div class="loading-dots">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                  </div>
                 </div>
-              </div>
-              <!-- 正文 -->
-              <template v-if="!msg.isMsgLoading && !msg.isRetrieving">
-                <div
-                  v-if="msg.isStream == 1 && parseFormat == 'html'"
-                  v-html="formatLinks(msg.content)"
-                  v-viewer
-                  class="message-content return-content"
-                  :class="{ 'is-error': msg.isError }"
-                ></div>
-                <div
-                  v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
-                  class="message-content return-content return-markdown"
-                  :class="{ 'is-error': msg.isError }"
-                >
-                  <MarkdownView :content="msg.content" />
-                </div>
-                <div
-                  v-else-if="msg.isStream == 0"
-                  class="message-content return-content"
-                  :class="{ 'is-error': msg.isError }"
-                >
-                  {{ msg.content }}
-                </div>
-                <!-- 流式过程中可能已收到 citations，等本条回答收尾（有 time）再展示 -->
-                <div v-if="msg.citations?.length && msg.time" class="citations">
-                  <div class="citations-title">
-                    <n-icon :component="FileTextOutlined" :size="14" />
-                    <span>参考来源</span>
-                    <span class="citations-count">{{ msg.citations.length }}</span>
+                <!-- 正文 -->
+                <template v-if="!msg.isMsgLoading && !msg.isRetrieving">
+                  <div
+                    v-if="msg.isStream == 1 && parseFormat == 'html'"
+                    v-html="formatLinks(msg.content)"
+                    v-viewer
+                    class="message-content return-content"
+                    :class="{ 'is-error': msg.isError }"
+                  ></div>
+                  <div
+                    v-else-if="msg.isStream == 1 && parseFormat == 'markdown'"
+                    class="message-content return-content return-markdown"
+                    :class="{ 'is-error': msg.isError }"
+                  >
+                    <MarkdownView :content="msg.content" />
                   </div>
                   <div
-                    v-for="(c, ci) in msg.citations"
-                    :key="c.id"
-                    class="citation-item"
-                    :title="`${c.source}\n${c.text}`"
+                    v-else-if="msg.isStream == 0"
+                    class="message-content return-content"
+                    :class="{ 'is-error': msg.isError }"
                   >
-                    <div class="citation-index">{{ ci + 1 }}</div>
-                    <span
-                      class="citation-source"
-                      role="link"
-                      :title="`查看文档：${c.source}`"
-                      @click.stop="openCitationDoc(c.source)"
-                    >
-                      {{ c.source }}
-                    </span>
-                    <span class="citation-text">{{ c.text }}</span>
-                    <span class="citation-score">{{ c.score.toFixed(3) }}</span>
+                    {{ msg.content }}
                   </div>
-                </div>
-                <div class="message-time">{{ msg.time }}</div>
-              </template>
+                  <!-- 流式过程中可能已收到 citations，等本条回答收尾（有 time）再展示 -->
+                  <div v-if="msg.citations?.length && msg.time" class="citations">
+                    <div class="citations-title">
+                      <n-icon :component="FileTextOutlined" :size="14" />
+                      <span>参考来源</span>
+                      <span class="citations-count">{{ msg.citations.length }}</span>
+                    </div>
+                    <div
+                      v-for="(c, ci) in msg.citations"
+                      :key="c.id"
+                      class="citation-item"
+                      :title="`${c.source}\n${c.text}`"
+                    >
+                      <div class="citation-index">{{ ci + 1 }}</div>
+                      <span
+                        class="citation-source"
+                        role="link"
+                        :title="`查看文档：${c.source}`"
+                        @click.stop="openCitationDoc(c.source)"
+                      >
+                        {{ c.source }}
+                      </span>
+                      <span class="citation-text">{{ c.text }}</span>
+                      <span class="citation-score">{{ c.score.toFixed(3) }}</span>
+                    </div>
+                  </div>
+                  <div class="message-time">{{ msg.time }}</div>
+                </template>
+              </div>
             </div>
           </div>
-        </div>
-      </template>
+        </template>
+      </div>
+      <!-- 回到底部按钮：叠在列表视口上，不随内容滚动 -->
+      <transition name="scroll-btn-fade">
+        <button
+          v-if="!shouldAutoScroll"
+          class="scroll-to-bottom-btn"
+          type="button"
+          @click="handleScrollToBottomClick"
+        >
+          <n-icon :component="ArrowDownOutlined" :size="16" />
+        </button>
+      </transition>
     </div>
     <!-- 输入区域 -->
     <div class="input-area">
@@ -241,6 +254,7 @@ import CloseCircleOutlined from '~icons/ant-design/close-circle-outlined';
 import SearchOutlined from '~icons/ant-design/search-outlined';
 import UnorderedListOutlined from '~icons/ant-design/unordered-list-outlined';
 import WarningOutlined from '~icons/ant-design/warning-outlined';
+import ArrowDownOutlined from '~icons/ant-design/arrow-down-outlined';
 
 const route = useRoute();
 const message = useMessage();
@@ -275,6 +289,7 @@ const aiLogo = ref('');
 const messages = ref<ChatMessage[]>([]); // 消息列表
 const newMessage = ref(''); // 输入框内容
 const isSending = ref(false); // 发送状态
+const shouldAutoScroll = ref(true); // 是否自动滚动到底部
 
 const systemPromptKey = ref<SystemPromptKey>(null);
 const selectedModel = ref<string | null>(null);
@@ -378,7 +393,33 @@ const selectedPrompt = ref<PromptItem | null>(null);
 const activePromptIndex = ref(0);
 const promptListRef = ref<HTMLElement | null>(null);
 
-const messageContainer = ref<typeof HTMLElement>();
+const messageContainer = ref<HTMLElement | null>(null);
+/** 程序化平滑滚动中，忽略 scroll 对 shouldAutoScroll 的同步，避免中途被误判为「离开底部」 */
+let suppressScrollSync = false;
+let smoothScrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 消息列表滚动事件：用户上滑时暂停自动滚动，回到底部时恢复 */
+function onMessageScroll() {
+  if (suppressScrollSync) return;
+  const el = messageContainer.value;
+  if (!el) return;
+  const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+  shouldAutoScroll.value = dist < 40;
+}
+
+function clearSmoothScrollGuard() {
+  suppressScrollSync = false;
+  shouldAutoScroll.value = true;
+  if (smoothScrollTimer != null) {
+    clearTimeout(smoothScrollTimer);
+    smoothScrollTimer = null;
+  }
+}
+
+function handleScrollToBottomClick() {
+  shouldAutoScroll.value = true;
+  scrollToBottom({ smooth: true });
+}
 
 // 1-作为独立页面使用
 const isOnlyPage = computed(() => {
@@ -830,13 +871,29 @@ function stopGeneration() {
   controller.value?.abort?.();
 }
 
-// 滚动到最底部
-function scrollToBottom() {
+// 滚动到最底部；流式跟随时瞬时，按钮点击可传 smooth
+function scrollToBottom(options?: { smooth?: boolean }) {
+  if (!shouldAutoScroll.value) return;
   nextTick(() => {
+    if (!shouldAutoScroll.value) return;
     const container = messageContainer.value;
-    if (container) {
-      container.scrollTop = container.scrollHeight;
+    if (!container) return;
+
+    if (options?.smooth) {
+      suppressScrollSync = true;
+      if (smoothScrollTimer != null) clearTimeout(smoothScrollTimer);
+      const onEnd = () => {
+        container.removeEventListener('scrollend', onEnd);
+        clearSmoothScrollGuard();
+      };
+      container.addEventListener('scrollend', onEnd, { once: true });
+      // 无 scrollend 的浏览器兜底
+      smoothScrollTimer = setTimeout(onEnd, 600);
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      return;
     }
+
+    container.scrollTop = container.scrollHeight;
   });
 }
 function handleInputBlur(e: FocusEvent) {
@@ -983,6 +1040,7 @@ defineExpose({
 </script>
 <style lang="less" scoped>
 .ai-agent-self {
+  position: relative;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -990,6 +1048,13 @@ defineExpose({
   flex-direction: column;
   box-sizing: border-box;
   background: linear-gradient(135deg, #cadbfa 0%, #e5ecfc 50%, #ebe1fe 100%);
+}
+.message-list-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .message-list {
   flex: 1;
@@ -1457,7 +1522,6 @@ defineExpose({
   margin-bottom: 10px;
 }
 .tool-step {
-  display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
@@ -1517,5 +1581,44 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 回到底部按钮 */
+.scroll-to-bottom-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #374151;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition:
+    background-color 0.15s,
+    transform 0.15s;
+}
+.scroll-to-bottom-btn:hover {
+  background: #e5e7eb;
+  transform: translateX(-50%) translateY(-1px);
+}
+.scroll-btn-fade-enter-active,
+.scroll-btn-fade-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.scroll-btn-fade-enter-from,
+.scroll-btn-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) scale(0.85);
 }
 </style>
